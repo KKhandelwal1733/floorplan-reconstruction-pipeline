@@ -24,7 +24,7 @@ def render_stub(out_path: Path, message: str) -> None:
         f'<text x="10" y="60" font-family="sans-serif" font-size="14" fill="black">'
         f'{message}</text></svg>'
     )
-    Path(out_path).write_text(svg)
+    Path(out_path).write_text(svg, encoding="utf-8")
 
 
 def render_plan(layout: "RoomLayout", out_path: Path) -> None:
@@ -88,4 +88,4 @@ def render_plan(layout: "RoomLayout", out_path: Path) -> None:
         )
 
     lines.append("</svg>")
-    Path(out_path).write_text("\n".join(lines))
+    Path(out_path).write_text("\n".join(lines), encoding="utf-8")

@@ -15,6 +15,8 @@ from pathlib import Path
 
 import numpy as np
 
+from roomscan.config import CONFIDENCE_MIN, DEPTH_MAX_M, DEPTH_MIN_M
+
 
 def _quat_to_rot(qx: float, qy: float, qz: float, qw: float) -> np.ndarray:
     """Hamilton quaternion → 3×3 rotation matrix."""
@@ -107,6 +109,7 @@ def load_scan(scan_dir: Path, max_frames: int | None = None) -> np.ndarray:
 
     # Determine whether to scale K (only needed for PNG depth maps)
     K_scaled: np.ndarray | None = None
+    conf_dir = scan_dir / "confidence"
 
     all_pts: list[np.ndarray] = []
     for (R, t), df in zip(poses, depth_files):
@@ -114,6 +117,18 @@ def load_scan(scan_dir: Path, max_frames: int | None = None) -> np.ndarray:
         if df.suffix == ".png" and K_scaled is None:
             K_scaled = _scale_K(K_rgb, depth.shape[1], depth.shape[0])
         K = K_scaled if df.suffix == ".png" else K_rgb
+
+        # Range filter (config.DEPTH_MIN_M / DEPTH_MAX_M)
+        depth[(depth < DEPTH_MIN_M) | (depth > DEPTH_MAX_M)] = 0.0
+
+        # Confidence filter — only for real scans that have a confidence dir
+        if conf_dir.exists():
+            conf_file = conf_dir / (df.stem + ".png")
+            if conf_file.exists():
+                from PIL import Image  # already imported for depth PNGs
+                conf = np.array(Image.open(conf_file), dtype=np.uint8)
+                depth[conf < CONFIDENCE_MIN] = 0.0
+
         cam_pts = _backproject(depth, K)
         if cam_pts.size:
             all_pts.append((R @ cam_pts.T).T + t)

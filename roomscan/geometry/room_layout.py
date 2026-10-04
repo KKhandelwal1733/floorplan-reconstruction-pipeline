@@ -10,6 +10,11 @@ from dataclasses import dataclass, field
 
 import numpy as np
 
+from roomscan.config import (
+    CEIL_UNOBSERVED_HALF_WIDTH_M,
+    CEIL_UNOBSERVED_MARGIN_M,
+    WALL_MERGE_ANGLE_DEG,
+)
 from roomscan.geometry.planes import detect_gravity, find_floor_ceiling
 from roomscan.geometry.uncertainty import measurement_from_inliers
 from roomscan.schema_out import Measurement
@@ -26,30 +31,36 @@ class WallSegment:
 @dataclass
 class RoomLayout:
     """All geometry extracted from a single-room scan."""
-    up_axis: np.ndarray           # unit vector pointing up in world coords
-    floor_d: float                 # plane offset: floor is {x: up_axis@x = -floor_d}
-    ceiling_d: float | None        # None → ceiling not captured
+    up_axis: np.ndarray                  # unit vector pointing up in world coords
+    floor_d: float                        # plane offset: floor is {x: up_axis@x = -floor_d}
+    ceiling_d: float | None              # None → ceiling not captured
     polygon: list[tuple[float, float]]   # floor outline in 2-D (metres)
     floor_area_m2: Measurement
     ceiling_height_m: Measurement | None
     walls: list[WallSegment] = field(default_factory=list)
+    # 3-D basis for back-projecting 2-D polygon points (set by extract_layout)
+    plan_u: np.ndarray = field(default_factory=lambda: np.array([1., 0., 0.]))
+    plan_v: np.ndarray = field(default_factory=lambda: np.array([0., 1., 0.]))
+    floor_level: float = 0.0             # median floor height in up_axis direction
+    ceiling_unobserved: bool = False     # True when ceiling plane not detected
+    capture_warnings: list[str] = field(default_factory=list)
 
 
 # ---------------------------------------------------------------------------
 # Internal helpers
 # ---------------------------------------------------------------------------
 
-def _to_2d(pts3: np.ndarray, up: np.ndarray) -> np.ndarray:
-    """Project 3-D points onto the plane perpendicular to `up`.
-
-    Returns (N, 2) array in an arbitrary but consistent 2-D coordinate system.
-    """
-    # pick two in-plane orthonormal vectors
+def _plan_basis(up: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    """Two in-plane orthonormal 3-D vectors perpendicular to `up`."""
     ref = np.array([1.0, 0.0, 0.0]) if abs(up[0]) < 0.9 else np.array([0.0, 1.0, 0.0])
-    u = np.cross(up, ref)
-    u /= np.linalg.norm(u)
+    u = np.cross(up, ref); u /= np.linalg.norm(u)
     v = np.cross(up, u)
-    v /= np.linalg.norm(v)
+    return u, v
+
+
+def _to_2d(pts3: np.ndarray, up: np.ndarray) -> np.ndarray:
+    """Project 3-D points onto the floor plane → (N, 2)."""
+    u, v = _plan_basis(up)
     return np.stack([pts3 @ u, pts3 @ v], axis=1)
 
 
@@ -73,6 +84,39 @@ def _convex_hull_2d(pts2: np.ndarray) -> list[tuple[float, float]]:
             upper.pop()
         upper.append(p)
     return lower[:-1] + upper[:-1]
+
+
+def _simplify_polygon(
+    verts: list[tuple[float, float]],
+    angle_tol_deg: float = WALL_MERGE_ANGLE_DEG,
+) -> list[tuple[float, float]]:
+    """Merge near-collinear hull vertices so each real wall is one straight run.
+
+    Raw convex hulls of noisy point clouds have dozens of micro-segments per
+    physical wall; this collapses runs that turn by less than `angle_tol_deg`.
+    """
+    if len(verts) <= 3:
+        return verts
+    tol = np.deg2rad(angle_tol_deg)
+    pts = list(verts)
+    changed = True
+    while changed and len(pts) > 3:
+        changed = False
+        n = len(pts)
+        for i in range(n):
+            prev = np.array(pts[(i - 1) % n])
+            cur = np.array(pts[i])
+            nxt = np.array(pts[(i + 1) % n])
+            v1, v2 = cur - prev, nxt - cur
+            n1, n2 = np.linalg.norm(v1), np.linalg.norm(v2)
+            if n1 < 1e-9 or n2 < 1e-9:
+                continue
+            cos_a = np.clip((v1 @ v2) / (n1 * n2), -1.0, 1.0)
+            if np.arccos(cos_a) < tol:
+                pts.pop(i)
+                changed = True
+                break
+    return pts
 
 
 def _polygon_area(verts: list[tuple[float, float]]) -> float:
@@ -123,6 +167,7 @@ def extract_layout(
         raise ValueError("Could not detect floor plane in point cloud.")
 
     floor_normal, floor_d_val, floor_mask = floor
+    warnings: list[str] = []
 
     # Use detected gravity as up direction (more stable than RANSAC normal alone)
     up = gravity.copy()
@@ -135,15 +180,18 @@ def extract_layout(
     # Floor height measurement (positions of inliers projected onto up)
     floor_heights = (pts[floor_mask] @ up)
     floor_height_m = measurement_from_inliers(floor_heights)
+    floor_level = float(floor_height_m.value)
 
-    # Ceiling
+    # Ceiling — Phase 5: fall back to wide-CI estimate when ceiling not detected
     ceil_d: float | None = None
     ceil_height_m: Measurement | None = None
+    ceiling_unobserved = False
+
     if ceiling is not None:
         _ceil_normal, ceil_d_raw, ceil_mask = ceiling
         ceil_heights = (pts[ceil_mask] @ up)
         ceil_pos_m = measurement_from_inliers(ceil_heights)
-        room_height = ceil_pos_m.value - floor_height_m.value
+        room_height = ceil_pos_m.value - floor_level
         ceil_height_m = Measurement(
             value=abs(room_height),
             lo=abs(room_height) - 0.05,
@@ -151,16 +199,39 @@ def extract_layout(
             confidence_level=0.9,
         )
         ceil_d = ceil_d_raw
+    else:
+        # Use 98th-percentile of observed heights as an upper-bound estimate
+        obs_top = float(np.percentile(pts @ up, 98)) - floor_level
+        est_h = obs_top + CEIL_UNOBSERVED_MARGIN_M
+        hw = CEIL_UNOBSERVED_HALF_WIDTH_M
+        # Keep the interval symmetric even if lo goes negative: a near-zero
+        # estimate (e.g. a floor-only scan with no height signal at all) is
+        # exactly the case that most needs the full configured half-width —
+        # clamping lo to 0 would silently shrink it below CEIL_UNOBSERVED_HALF_WIDTH_M.
+        ceil_height_m = Measurement(
+            value=est_h,
+            lo=est_h - hw,
+            hi=est_h + hw,
+            confidence_level=0.9,
+        )
+        ceiling_unobserved = True
+        warnings.append(
+            "ceiling plane not detected - height estimated from point-cloud upper "
+            f"bound ({obs_top:.2f} m obs + {CEIL_UNOBSERVED_MARGIN_M} m margin); "
+            f"CI is +/-{hw} m"
+        )
 
     # Floor polygon: project floor inliers into 2-D
+    plan_u, plan_v = _plan_basis(up)
     floor_pts = pts[floor_mask]
     if len(floor_pts) > floor_subsample:
         idx = np.random.default_rng(0).choice(len(floor_pts), floor_subsample,
                                                replace=False)
         floor_pts = floor_pts[idx]
 
-    pts2d = _to_2d(floor_pts, up)
+    pts2d = np.stack([floor_pts @ plan_u, floor_pts @ plan_v], axis=1)
     hull = _convex_hull_2d(pts2d)
+    hull = _simplify_polygon(hull)
 
     area = _polygon_area(hull)
     area_m = Measurement(value=area, lo=area * 0.97, hi=area * 1.03,
@@ -176,4 +247,9 @@ def extract_layout(
         floor_area_m2=area_m,
         ceiling_height_m=ceil_height_m,
         walls=walls,
+        plan_u=plan_u,
+        plan_v=plan_v,
+        floor_level=floor_level,
+        ceiling_unobserved=ceiling_unobserved,
+        capture_warnings=warnings,
     )
