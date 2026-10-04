@@ -26,7 +26,7 @@ the project's hard rule against fabricating numbers).
 | Concealed-damage flags with rule ID that fired | `roomscan/damage/rules.py` (`DamageFlag.rule_id`) | **done** |
 | Scope line items keyed to surface IDs | `roomscan/damage/rules.py::scope_for_damage` | **done**, no cost figures (no real pricing data to ground one in) |
 | Confidence interval on every measurement | `roomscan/schema_out.py::Measurement` | **done** |
-| One command per capture | `roomscan/cli.py` | **partial** — `python -m roomscan.cli <input> --out <dir> --tier {...}` works, but doesn't match the literal `python -m roomscan run <input> --tier {...,auto} --out <dir>` contract |
+| One command per capture | `roomscan/__main__.py`, `roomscan/cli.py` | **done** — `python -m roomscan run <input> --tier {lidar,video,photo,auto} --out <dir>` matches the literal contract exactly |
 | JSON to schema | `schema/plan.schema.json`, `roomscan/plan_builder.py` | **done**, schema v0.1 (no published schema was supplied — stated plainly, see schema file header) |
 | Rendered plan | `roomscan/render/svg_plan.py` | **done** |
 

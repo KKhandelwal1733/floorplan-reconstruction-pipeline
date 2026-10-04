@@ -306,15 +306,18 @@ def _print_layout_summary(layout) -> None:
 
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(prog="roomscan", description="Floor plan reconstruction pipeline")
-    p.add_argument("input_path", type=Path, help="Scan directory, video file, or photo folder")
-    p.add_argument("--out", type=Path, default=Path("out"), help="Output directory (default: out/)")
-    p.add_argument("--tier", choices=["lidar", "video", "photo"], default=None,
-                   help="Force capture tier (default: auto-detect)")
+    sub = p.add_subparsers(dest="command", required=True)
+    run_p = sub.add_parser("run", help="Reconstruct a dimensioned floor plan from a capture")
+    run_p.add_argument("input_path", type=Path,
+                        help="Scan directory, video file, or photo/property folder")
+    run_p.add_argument("--out", type=Path, default=Path("out"), help="Output directory (default: out/)")
+    run_p.add_argument("--tier", choices=["lidar", "video", "photo", "auto"], default="auto",
+                        help="Capture tier, or auto-detect from the input shape (default: auto)")
     args = p.parse_args(argv)
 
     args.out.mkdir(parents=True, exist_ok=True)
 
-    tier = args.tier or _detect_tier(args.input_path)
+    tier = _detect_tier(args.input_path) if args.tier == "auto" else args.tier
     print(f"[roomscan] tier: {tier}")
 
     if tier == "lidar":

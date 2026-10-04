@@ -27,7 +27,7 @@ make calibrate # conformal calibration across tiers
 ## One command, three tiers
 
 ```bash
-python -m roomscan.cli <input_path> --out <dir> [--tier lidar|video|photo]
+python -m roomscan run <input_path> --tier {lidar,video,photo,auto} --out <dir>
 ```
 
 Tier is auto-detected from the input shape if `--tier` is omitted: a

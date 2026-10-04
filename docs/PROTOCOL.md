@@ -25,7 +25,10 @@ iPhone/iPad with LiDAR is available.
 5. Stop the scan. Export via Stray Scanner's share function (produces the
    `depth/`, `confidence/`, `rgb.mp4`, `odometry.csv`, `camera_matrix.csv`
    folder structure this pipeline expects).
-6. Run: `python -m roomscan.cli <exported_folder> --out <output_dir>`
+6. Run: `python -m roomscan run <exported_folder> --tier lidar --out <output_dir>`
+   (for a multi-room property, put one exported-scan folder per room inside a
+   parent folder and point `<exported_folder>` at the parent instead — rooms
+   are stitched via door-to-door pose-graph matching, see COMPLIANCE.md)
 
 ## Video tier — only if no LiDAR device is available
 
@@ -41,7 +44,10 @@ measurement, and say so if presenting it live.
    to over-capture).
 2. Avoid pointing at blank, low-texture surfaces (plain walls, ceilings) for
    extended periods — the reconstruction needs visual features to track.
-3. Run: `python -m roomscan.cli <video_file.mp4> --out <output_dir>`
+3. Run: `python -m roomscan run <video_file.mp4> --tier video --out <output_dir>`
+   (for a multi-room property, put one video per room in a named subfolder
+   inside a parent folder and point at the parent instead — same pose-graph
+   stitch as the lidar tier)
 
 ## Photo tier — last resort only
 
@@ -57,7 +63,7 @@ use this if neither LiDAR nor video capture was possible.
    overlap in what they show (e.g. two photos both showing the same corner
    from different angles), since the pipeline needs to match shared features
    between at least one photo pair.
-3. Run: `python -m roomscan.cli <property_folder> --out <output_dir>`
+3. Run: `python -m roomscan run <property_folder> --tier photo --out <output_dir>`
 
 ## Reading the output
 
