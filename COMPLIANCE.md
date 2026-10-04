@@ -44,7 +44,22 @@ Outputs are **estimates**, not certified surveys.
   existing hand-set empirical floors (`VIDEO_/PHOTO_EMPIRICAL_MIN_REL_HW`)
   remain the actual active mechanism; rerun `make calibrate` as more real
   captures accumulate.
-- Damage classification is advisory. Human review required before remediation decisions.
+- Damage classification (`roomscan/damage/`) is a crude colour heuristic,
+  NOT a trained classifier -- no labelled damage imagery exists for this
+  project to train or validate one against. It flags dark, desaturated
+  blobs in RGB frames that deviate from each frame's own median brightness
+  (HSV thresholding + connected components), classifies them by vertical
+  position in-frame (floor-adjacent / ceiling-adjacent / neither) as a
+  crude proxy for likely damage type, and applies simple, explainable
+  if/then rules to produce flags and scope line items -- never a cost
+  estimate (no real pricing data exists to ground one in). Tested against
+  a real (non-damaged) room, it flagged 23 candidates across 15 frames: an
+  expected high false-positive rate (shadows, dark furniture, ordinary wall
+  texture all trigger it), not a bug. surface_id and area_m2 are also rough
+  proxies (round-robin wall assignment, pixel-area scaled by the room's
+  average wall area), not a true per-wall 3-D projection -- this module
+  exists to prompt human review, not to diagnose. Human review required
+  before any remediation decision.
 
 ## Not a Substitute For
 Professional structural assessment, licensed surveying, or building-code inspection.

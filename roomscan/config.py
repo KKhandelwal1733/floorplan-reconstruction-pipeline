@@ -96,3 +96,25 @@ VIDEO_PLANE_THRESH_FRAC = 0.02        # plane-RANSAC threshold as a fraction of 
 # half-width regardless of ensemble agreement. Calibrated on n=1 example --
 # revisit with more real video/LiDAR comparison pairs (see derive_tiers.py).
 VIDEO_EMPIRICAL_MIN_REL_HW = 0.85
+
+# --- Damage detection (Phase 10): crude colour heuristic, advisory only ---
+# No trained classifier exists here (would need labelled damage imagery this
+# project has none of) -- this flags dark, desaturated blobs that deviate
+# from a frame's own median brightness. It WILL also flag shadows, dark
+# furniture, and normal wall texture. COMPLIANCE.md already states damage
+# classification is advisory, human review required -- this module produces
+# exactly that: a prompt for review, not a diagnosis.
+DAMAGE_VALUE_DROP_THRESH = 0.25     # min brightness drop (relative to frame median) to flag a pixel
+DAMAGE_SATURATION_THRESH = 0.35     # max saturation to flag a pixel (stains are usually desaturated)
+DAMAGE_MIN_BLOB_AREA_FRAC = 0.005   # ignore specks smaller than this fraction of frame area
+DAMAGE_MAX_BLOB_AREA_FRAC = 0.40    # ignore blobs this large (more likely whole-frame lighting/shadow)
+DAMAGE_FLOOR_ZONE_FRAC = 0.30       # bottom fraction of frame height counted as "floor-adjacent"
+DAMAGE_CEILING_ZONE_FRAC = 0.20     # top fraction of frame height counted as "ceiling-adjacent"
+DAMAGE_LARGE_STAIN_AREA_FRAC = 0.05  # floor-adjacent blob above this frame-fraction triggers R001
+DAMAGE_VERY_DARK_VALUE = 0.15        # mean V below this triggers the mould-risk flag R002
+# Area-estimate CI: converting a 2-D pixel blob to a 3-D m^2 without a real
+# wall projection is crude -- wide, asymmetric bounds (quick easy
+# underestimate, i.e. missed extent behind furniture, more likely than
+# overestimate) rather than a false-precision number.
+DAMAGE_AREA_CI_LOW_MULT = 0.3
+DAMAGE_AREA_CI_HIGH_MULT = 2.5
