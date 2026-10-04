@@ -130,11 +130,18 @@ VIDEO_PLANE_THRESH_FRAC = 0.02        # plane-RANSAC threshold as a fraction of 
                                        # (the unscaled cloud has no metric units yet, so a fixed-metre
                                        # threshold like RANSAC_THRESH_M is meaningless here)
 # This single-frame-chaining SfM (no bundle adjustment) measured ~65-88% error
-# against real LiDAR ground truth on the one real video tested (single_room:
-# floor area 4.4 vs 36.6 sq m). The scale ensemble's own spread doesn't
+# against real LiDAR ground truth on the first real video tested (single_room:
+# originally 4.4 vs 36.6 sq m; re-measured as the pipeline evolved, now 3.26
+# vs 36.85 sq m / 91.2% error -- confirmed deterministic across reruns, see
+# docs/TECHNICAL_REPORT.md Sec. 6). The scale ensemble's own spread doesn't
 # reliably predict error that large, so CIs are floored at this relative
-# half-width regardless of ensemble agreement. Calibrated on n=1 example --
-# revisit with more real video/LiDAR comparison pairs (see derive_tiers.py).
+# half-width regardless of ensemble agreement. A second real video
+# (real_floor_only) measured 99.2% error -- WORSE than this floor, and its
+# reported interval fails to cover the true value at all (0.07-1.54 vs 97.3
+# sq m): a relative-CI floor cannot rescue a reconstruction whose point
+# estimate is wrong by two orders of magnitude; that case needs a coverage
+# check (too few points triangulated), not a wider floor. Revisit with more
+# real video/LiDAR comparison pairs (see derive_tiers.py) -- still only n=2.
 VIDEO_EMPIRICAL_MIN_REL_HW = 0.85
 
 # --- Capture-quality flags (case-study realignment): mirror/glass/wet-look/

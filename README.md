@@ -52,7 +52,7 @@ output, even when reconstruction has to abstain (see COMPLIANCE.md).
 | Tier | Input | Validated accuracy | Notes |
 |---|---|---|---|
 | LiDAR | Stray Scanner export | ±2 cm (assumed; no laser ground truth exists to confirm — see Benchmark Data Situation below) | Most mature, most tested tier |
-| Video | Single handheld `.mp4` | **65-91% error** on the one real video tested against LiDAR pseudo-ground-truth | Lightweight monocular SfM, no bundle adjustment — a deliberate CPU-only, no-GPU-dependency choice (see DISCLOSURES.md) |
+| Video | Single handheld `.mp4` | **65-99% error** on the two real videos tested against LiDAR pseudo-ground-truth (one interval failed to cover the true value at all — see `docs/TECHNICAL_REPORT.md` §6) | Lightweight monocular SfM, no bundle adjustment — a deliberate CPU-only, no-GPU-dependency choice (see DISCLOSURES.md) |
 | Photo | 2-8 stills per room | **~94% error** when it succeeds; frequently abstains outright at realistic photo counts | Least validated; treat any output as a rough approximation |
 
 Full detail, including *why* these numbers are what they are (and the real

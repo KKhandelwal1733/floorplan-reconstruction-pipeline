@@ -9,12 +9,16 @@ Outputs are **estimates**, not certified surveys.
 - Video tier: lightweight monocular SfM (no bundle adjustment) + a scale
   ensemble of physical-size priors, chosen over a heavier dependency
   (e.g. COLMAP) per the hard rule to avoid large/GPU dependencies without
-  asking first. On the one real video tested against LiDAR-tier pseudo-
-  ground-truth for the same room (see `bench/derive_tiers.py`), floor area
-  and ceiling height errors were 65-91% (see project `config.py`
-  `VIDEO_EMPIRICAL_MIN_REL_HW`), not a small percentage — intervals are
-  widened accordingly, but accuracy should be treated as unvalidated and
-  this tier used with caution until more real comparisons exist.
+  asking first. On the two real videos tested against LiDAR-tier pseudo-
+  ground-truth for the same room (see `bench/derive_tiers.py`; a third real
+  capture, `real_with_ceiling`, honestly abstains rather than comparing),
+  floor area and ceiling height errors were 65-99% (see project `config.py`
+  `VIDEO_EMPIRICAL_MIN_REL_HW`), not a small percentage. For one of the two
+  (`real_floor_only`), the reported interval doesn't just have a large
+  error — it fails to cover the true value at all (see
+  `docs/TECHNICAL_REPORT.md` §6). Intervals are widened accordingly, but
+  accuracy should be treated as unvalidated and this tier used with caution
+  until more real comparisons exist.
 - Photo tier: 2-8 unordered stills per room, no depth/poses. Reuses the
   video tier's monocular SfM core, but matches ALL photo pairs (not just
   consecutive) and reconstructs from only the single best-matching pair,

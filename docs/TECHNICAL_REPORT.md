@@ -16,8 +16,10 @@ revised. That discipline is the throughline of this report.
 **Headline honest finding**: the LiDAR tier is solid and well-tested. The
 video and photo tiers, built with a deliberately lightweight (no bundle
 adjustment, CPU-only) monocular structure-from-motion approach, measured
-**65-91%** and **~94%** error respectively against LiDAR pseudo-ground-truth —
-nowhere near the aspirational ±3%/±8% gates in the original brief. This is
+**65-99%** and **~94%** error respectively against LiDAR pseudo-ground-truth —
+nowhere near the aspirational ±3%/±8% gates in the original brief. For one
+real capture, the video tier's reported interval doesn't just have a large
+error, it fails to cover the true value at all (Section 6). This is
 disclosed prominently (COMPLIANCE.md, README.md) rather than hidden, and
 every confidence interval in those tiers is widened to reflect it.
 
@@ -146,8 +148,8 @@ correction, is in `DECLARATION.md` and reproducible via
 | Metric | LiDAR | Video | Photo |
 |---|---|---|---|
 | Method | Dense RANSAC geometry | Monocular SfM + scale ensemble | Same, best-pair strategy |
-| Validated against | — (no laser ground truth exists) | Real LiDAR pseudo-ground-truth, n=1 real capture | Simulated-from-real stills, n=4 trials |
-| Floor-area error | Not measured (no independent ground truth) | 65-91% | ~94% (1 success of 4 trials) |
+| Validated against | — (no laser ground truth exists) | Real LiDAR pseudo-ground-truth, n=2 real captures with synchronized video (a 3rd, `real_with_ceiling`, honestly abstains rather than comparing) | Simulated-from-real stills, n=4 trials |
+| Floor-area error | Not measured (no independent ground truth) | 65-99% (`single_room` 91.2%, `real_floor_only` 99.2%, both freshly regenerated and confirmed reproducible across reruns) | ~94% (1 success of 4 trials) |
 | Typical outcome | Confident measurement | Confident but wide-CI measurement | Frequent honest abstention |
 | CI mechanism | RANSAC inlier residuals + quality gate | Empirical floor (`VIDEO_EMPIRICAL_MIN_REL_HW=0.85`) | Empirical floor (`PHOTO_EMPIRICAL_MIN_REL_HW=0.90`) |
 
@@ -211,14 +213,26 @@ its observed error against that pseudo-ground-truth — and the answer
 differs by capture, which matters more than either single number:
 
 - **`single_room`** (the case that originally motivated
-  `VIDEO_EMPIRICAL_MIN_REL_HW`): the scale ensemble's own spread, before a
-  floor was imposed, implied a narrower CI than the ~88% error actually
-  observed (4.4 vs 36.6 m² — see `config.py`). Three independent scale
-  priors agreeing with *each other* while all being wrong together is the
-  textbook signature of **bias dominating variance**: the error is shared
-  and systematic (every prior operates on the same underlying, un-bundle-
-  adjusted reconstruction), not estimator-to-estimator noise a wider
-  ensemble would average out.
+  `VIDEO_EMPIRICAL_MIN_REL_HW`): freshly regenerated for this report
+  (`bench.derive_tiers.compare_video_to_lidar`, confirmed byte-for-byte
+  identical across two back-to-back reruns, so this is a stable number, not
+  run-to-run noise) gives **91.2%** floor-area error (3.26 vs 36.85 m²) —
+  the exact figure has drifted a little from the "4.4 vs 36.6 m²" originally
+  cited in `config.py`'s comment as the pipeline evolved across later
+  phases, but lands in the same severely-wrong territory that comment
+  describes. Only 2 of the 3 scale priors fired this run (room-diagonal
+  0.263, camera-height 0.457; the ceiling-height prior didn't find a
+  ceiling plane in this sparse reconstruction), so their spread is modest —
+  yet the actual error is enormous. Scale priors that *agree with each
+  other* (low apparent variance) while the point estimate is still ~90%
+  wrong is the textbook signature of **bias dominating variance**: the
+  error is shared and systematic (every prior operates on the same
+  underlying, un-bundle-adjusted reconstruction), not estimator-to-
+  estimator noise a wider ensemble would average out. The video tier's
+  ceiling-height comparison for this same capture is similarly bad (43.8%
+  error, 3.29m reconstructed vs 1.85m true) — not previously reported for
+  this fixture, included here for completeness; its CI is already wide
+  enough (-0.51 to 7.08m) not to present it as a confident number.
 - **`real_floor_only`** (freshly measured for this report): the three scale
   priors disagree sharply with *each other* (room-diagonal 0.297,
   ceiling-height 0.579, camera-height 0.167 — a ~3.5x spread), correctly
@@ -226,10 +240,14 @@ differs by capture, which matters more than either single number:
   close to the 85% hard floor) before the observed error (99.2%, 0.81 vs
   97.3 m²) is even compared. Here the **variance signal is doing real
   work** — the method is visibly uncertain about itself, not silently
-  confident while wrong. The residual gap between a ~69-85% CI and a 99%
-  actual error, combined with only 5,889 reconstructed sparse points for a
-  ~97 m² room, points to a *coverage* failure (too little of the room
-  triangulated at all) compounding the scale bias, not scale bias alone.
+  confident while wrong. But stated precisely: the reported interval
+  (0.07–1.54 m²) does not merely undershoot the true value's magnitude, it
+  **fails to cover it at all** — 97.3 m² is nowhere near that range, by two
+  orders of magnitude. No relative-CI widening anchored to a point estimate
+  this wrong could ever restore coverage; combined with only 5,889
+  reconstructed sparse points for a ~97 m² room, this points to a
+  *coverage* failure (too little of the room triangulated at all)
+  compounding the scale bias, not scale bias alone.
 
 **Conclusion:** bias and variance both contribute, and which one dominates
 is capture-dependent — this project does not have enough real examples (n=2
@@ -283,9 +301,10 @@ More broadly, the project's testing discipline follows one consistent rule:
 when real data reveals a gap, widen or abstain rather than force a tighter
 number to match one example.* Every numeric claim in this report was
 produced by actually running the pipeline (`bench/derive_tiers.py`,
-`bench/ablate.py`, `bench/calibrate.py`, `bench/fixloop_ceiling_check.py` are
-all directly runnable and regenerate their own numbers), not estimated by
-inspection. 84 tests (as of Phase 11, all passing) cover unit-level correctness,
+`bench/ablate.py`, `bench/calibrate.py`, `bench/fixloop_ceiling_check.py`,
+`bench/repro.py` are all directly runnable and regenerate their own
+numbers), not estimated by inspection. 102 tests (confirmed passing on the
+most recent full run) cover unit-level correctness,
 structural guarantees (never crash, always produce valid schema output,
 even in total-abstention cases), and integration against both real and
 clearly-labelled-simulated data, with real-data tests skipping cleanly
@@ -296,6 +315,12 @@ fixtures aren't present on a given machine.
 
 - Video and photo tier accuracy is poor and should be treated as a rough
   approximation, not a measurement, until validated against more real data.
+  For `real_floor_only` specifically, the reported confidence interval
+  doesn't just have a large relative error — it fails to **cover the true
+  value at all** (0.07-1.54 m² reported vs. 97.3 m² true, see Section 6).
+  No relative-CI widening can fix this; it needs a coverage/completeness
+  check the pipeline doesn't currently have (too few points triangulated to
+  trust the reconstruction's shape at all, not just its scale).
 - Multi-room stitching (`roomscan/geometry/pose_graph.py`) now solves a real
   door-to-door pose graph per room, but no real multi-room fixture (any
   tier) exists to validate the result against ground truth — treat it as
@@ -333,3 +358,11 @@ fixtures aren't present on a given machine.
    while the other two real fixtures pass comfortably — is it room size,
    opening count, or scan-path coverage that's driving the difference? A
    single additional real capture can't answer this; several would start to.
+6. Add a minimum-reconstructed-point / coverage check to the video tier,
+   not just a minimum-count threshold to attempt scale estimation at all
+   (`VIDEO_MIN_RECONSTRUCTED_PTS`). `real_floor_only`'s case (Section 6)
+   shows a relative-CI floor cannot rescue coverage when the point estimate
+   itself is wrong by two orders of magnitude — the reported interval
+   should instead widen to "not measured" or abstain outright below some
+   points-per-m²-of-assumed-room-size ratio, the same philosophy already
+   applied to the LiDAR tier's quality gate.

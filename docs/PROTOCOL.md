@@ -32,9 +32,10 @@ iPhone/iPad with LiDAR is available.
 
 ## Video tier — only if no LiDAR device is available
 
-Documented accuracy is poor (65-91% error on the one real example tested — see
-COMPLIANCE.md). Use this tier's output as a rough sanity check, not a
-measurement, and say so if presenting it live.
+Documented accuracy is poor (65-99% error across the two real examples
+tested, one with a reported interval that fails to cover the true value at
+all — see COMPLIANCE.md). Use this tier's output as a rough sanity check,
+not a measurement, and say so if presenting it live.
 
 1. Record a single continuous handheld video walking the room's perimeter,
    similar motion to the LiDAR tier's walk (steady pace, not jerky).

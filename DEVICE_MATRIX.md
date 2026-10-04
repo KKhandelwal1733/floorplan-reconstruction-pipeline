@@ -15,7 +15,7 @@ taken from the benchmark actually regenerated this session (`bench/derive_tiers.
 | Tier | What was measured | Result | Source |
 |---|---|---|---|
 | LiDAR | No independent ground truth exists (no laser/tape data — see `COMPLIANCE_MATRIX.md`) | **Not measured.** RANSAC-derived confidence intervals are self-consistent (split-scan repeatability gate passes against real data) but not validated against an external truth | `bench/harness.py::_repeatability_gate`, `tests/test_repeatability.py` |
-| Video | Floor area & ceiling height vs. LiDAR-tier pseudo-ground-truth, same physical room, one real video | **65-91% error** (not 3%). Confidence intervals are widened to reflect this (`VIDEO_EMPIRICAL_MIN_REL_HW=0.85` floor) | `bench/derive_tiers.py::compare_video_to_lidar`, `COMPLIANCE.md` |
+| Video | Floor area & ceiling height vs. LiDAR-tier pseudo-ground-truth, same physical room, two real videos | **65-99% error** (not 3%); one capture's reported interval fails to cover the true value at all, not just a large relative error (see `docs/TECHNICAL_REPORT.md` §6). Confidence intervals are widened to reflect this (`VIDEO_EMPIRICAL_MIN_REL_HW=0.85` floor) | `bench/derive_tiers.py::compare_video_to_lidar`, `COMPLIANCE.md` |
 | Photo | Same comparison, simulated photo sets (stills derived from the real video, since no real multi-room photo fixture exists) | Reconstruction succeeded in **1 of 4** simulated trials at realistic photo counts (6-8 photos); when it succeeds, **~94% error**. The other 3 trials abstained outright (insufficient shared visual structure) rather than reporting a number | `bench/derive_tiers.py::compare_photo_to_lidar`, `COMPLIANCE.md` |
 
 ## What this means in practice
