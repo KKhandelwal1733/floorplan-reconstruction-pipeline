@@ -2,6 +2,11 @@
 openings/damage/scope (Phase 10 closes the loop: CLAUDE.md documents
 plan.json as a per-capture output, but nothing wrote one until damage/scope
 data existed to put in it).
+
+Every write_*_plan function here also writes report.md alongside plan.json
+(same output directory) -- documented as a standard per-capture CLI output
+since Phase 1, wired up as part of the case-study realignment (see
+COMPLIANCE_MATRIX.md).
 """
 from __future__ import annotations
 
@@ -9,6 +14,7 @@ from pathlib import Path
 from typing import Any
 
 from roomscan.geometry.room_layout import RoomLayout
+from roomscan.render.report_md import write_report
 from roomscan.schema_out import (
     Adjacency,
     Capture,
@@ -113,7 +119,9 @@ def build_abstained_plan(tier: str, reason: str) -> Plan:
 
 
 def write_abstained_plan(tier: str, reason: str, out_path: Path) -> None:
-    write_plan(build_abstained_plan(tier, reason), out_path)
+    plan = build_abstained_plan(tier, reason)
+    write_plan(plan, out_path)
+    write_report(plan, out_path.parent / "report.md")
 
 
 def build_property_plan(
@@ -169,7 +177,9 @@ def write_property_plan(
     per_room_damage: dict[str, tuple[list[Damage], list[ScopeItem]]] | None = None,
     tier: str = "photo",
 ) -> None:
-    write_plan(build_property_plan(property_layout, per_room_damage, tier), out_path)
+    plan = build_property_plan(property_layout, per_room_damage, tier)
+    write_plan(plan, out_path)
+    write_report(plan, out_path.parent / "report.md")
 
 
 def write_single_room_plan(
@@ -182,3 +192,4 @@ def write_single_room_plan(
 ) -> None:
     plan = build_single_room_plan(tier, layout, damages, scope_items, detected_openings)
     write_plan(plan, out_path)
+    write_report(plan, out_path.parent / "report.md")

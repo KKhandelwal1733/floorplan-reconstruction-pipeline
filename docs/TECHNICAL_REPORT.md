@@ -206,15 +206,15 @@ fixtures aren't present on a given machine.
 
 - Video and photo tier accuracy is poor and should be treated as a rough
   approximation, not a measurement, until validated against more real data.
-- Multi-room stitching does not determine true relative room position or
-  orientation — schematic grid layout only.
+- Multi-room stitching (`roomscan/geometry/pose_graph.py`) now solves a real
+  door-to-door pose graph per room, but no real multi-room fixture (any
+  tier) exists to validate the result against ground truth — treat it as
+  internally self-consistent, not externally verified. Rooms without a door
+  match still fall back to the schematic grid.
 - Damage detection is a heuristic prompt for human review, not a diagnosis;
   expect a high false-positive rate.
 - Conformal calibration cannot yet provide a statistically justified
   guarantee at this project's target confidence level.
-- `report.md` (documented as a standard per-capture CLI output alongside
-  `plan.json`/`plan.svg`) is not yet wired up — a known, scoped gap, separate
-  from this report.
 
 ## 9. Recommendations for Future Work
 
@@ -229,5 +229,7 @@ fixtures aren't present on a given machine.
 3. A small labelled damage dataset (even informally labelled) would let the
    damage heuristic be measured for precision/recall instead of just
    observed qualitatively.
-4. Wire up `report.md` to close the one remaining documented-but-missing CLI
-   output.
+4. A real multi-room fixture (any tier) would let the pose-graph stitch be
+   validated against ground truth instead of only its own internal
+   consistency (does the synthetic ablation's finding hold up on a real
+   capture?).

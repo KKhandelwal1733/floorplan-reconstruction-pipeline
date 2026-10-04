@@ -49,6 +49,10 @@ def test_write_single_room_plan_roundtrip(tmp_path):
     assert len(data["rooms"]) == 1
     assert data["rooms"][0]["floor_area_m2"]["value"] == pytest.approx(layout.floor_area_m2.value)
 
+    report = (tmp_path / "report.md").read_text(encoding="utf-8")
+    assert "lidar" in report
+    assert "Floor area" in report
+
 
 def test_build_abstained_plan_schema_valid():
     plan = build_abstained_plan("video", "SfM reconstruction produced only 3 points")
@@ -65,6 +69,9 @@ def test_write_abstained_plan_roundtrip(tmp_path):
     validate_plan_dict(data)
     assert data["capture"]["tier"] == "photo"
     assert data["capture"]["status"] == "abstained"
+
+    report = (tmp_path / "report.md").read_text(encoding="utf-8")
+    assert "no rooms reconstructed" in report
 
 
 def test_build_single_room_plan_degraded_status_when_ceiling_unobserved():

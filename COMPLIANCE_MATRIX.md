@@ -29,6 +29,7 @@ the project's hard rule against fabricating numbers).
 | One command per capture | `roomscan/__main__.py`, `roomscan/cli.py` | **done** — `python -m roomscan run <input> --tier {lidar,video,photo,auto} --out <dir>` matches the literal contract exactly |
 | JSON to schema | `schema/plan.schema.json`, `roomscan/plan_builder.py` | **done**, schema v0.1 (no published schema was supplied — stated plainly, see schema file header) |
 | Rendered plan | `roomscan/render/svg_plan.py` | **done** |
+| `report.md` per-capture output | `roomscan/render/report_md.py`, wired into `plan_builder.py`'s `write_*_plan` | **done** — human-readable summary (tier/status, warnings, footprint/adjacency, per-room area/height/pose/openings/damage/scope), written alongside `plan.json`/`plan.svg` on every run |
 
 ### Benchmark set (composition specified in the case study)
 
@@ -101,11 +102,10 @@ compliance coverage / 10% head-to-head / 5% capture route / 5% process evidence)
   benchmark accuracy (15%), head-to-head (10%), and the ground-truth-dependent rows
   within gates/deliverables.
 - **In active remediation** (tracked, buildable without device access): reproduction
-  bundle, error budget + bias/variance report sections, CLI contract match, `report.md`
-  wiring.
+  bundle, error budget + bias/variance report sections.
 - **Done**: fix loop, process evidence, device matrix, this matrix, model/data
   disclosures, multi-room door-to-door pose-graph stitching (all three tiers;
   unvalidated against ground truth, no fixture exists), drift on/off ablation
   (synthetic ring, confirms the correction mechanism works; real-world accuracy
   still not measured), mirror/glass/wet-surface/low-light capture-quality flags
-  (heuristic, all three tiers).
+  (heuristic, all three tiers), literal CLI command contract, `report.md` wiring.
