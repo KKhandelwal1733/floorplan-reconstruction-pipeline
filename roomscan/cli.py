@@ -43,6 +43,20 @@ def _run_damage_scan(frames, layout):
     return damages, scope_items
 
 
+def _run_capture_quality_check(frames, layout) -> None:
+    """Shared by all tiers: flag low light / mirror / glass / wet-look
+    surfaces in submitted frames (advisory, crude heuristic -- never lets a
+    failure here affect an otherwise-successful geometry run)."""
+    from roomscan.geometry.capture_quality import apply_capture_quality_warnings
+    try:
+        issues = apply_capture_quality_warnings(layout, frames)
+    except Exception as exc:
+        print(f"[roomscan] capture-quality check failed (geometry unaffected): {exc}")
+        return
+    for w in issues:
+        print(f"[roomscan] warning: {w}")
+
+
 def _is_scan_dir(d: Path) -> bool:
     return (d / "depth").exists()
 
@@ -93,6 +107,7 @@ def _run_lidar_single(input_path: Path, out: Path) -> None:
             from roomscan.io.video_loader import sample_frames
             frames = sample_frames(video_path, interval_s=DAMAGE_SCAN_INTERVAL_S,
                                     max_frames=DAMAGE_SCAN_N_FRAMES)
+            _run_capture_quality_check(frames, layout)
             damages, scope_items = _run_damage_scan(frames, layout)
 
         write_single_room_plan("lidar", layout, out / "plan.json", damages, scope_items, openings)
@@ -135,6 +150,7 @@ def _run_lidar_property(input_path: Path, out: Path) -> None:
                 if video_path.exists():
                     frames = sample_frames(video_path, interval_s=DAMAGE_SCAN_INTERVAL_S,
                                             max_frames=DAMAGE_SCAN_N_FRAMES)
+                    _run_capture_quality_check(frames, layout)
                     damages, scope_items = _run_damage_scan(frames, layout)
                 per_room_damage[room_dir.name] = (damages, scope_items)
             except Exception as e:
@@ -183,6 +199,7 @@ def _run_video_single(input_path: Path, out: Path) -> None:
 
         frames = sample_frames(input_path, interval_s=DAMAGE_SCAN_INTERVAL_S,
                                 max_frames=DAMAGE_SCAN_N_FRAMES)
+        _run_capture_quality_check(frames, layout)
         damages, scope_items = _run_damage_scan(frames, layout)
 
         write_single_room_plan("video", layout, out / "plan.json", damages, scope_items)
@@ -224,6 +241,7 @@ def _run_video_property(input_path: Path, out: Path) -> None:
 
                 frames = sample_frames(video_path, interval_s=DAMAGE_SCAN_INTERVAL_S,
                                         max_frames=DAMAGE_SCAN_N_FRAMES)
+                _run_capture_quality_check(frames, layout)
                 per_room_damage[room_dir.name] = _run_damage_scan(frames, layout)
             except Exception as e:
                 failures[room_dir.name] = str(e)
@@ -263,6 +281,7 @@ def _run_photo(input_path: Path, out: Path) -> None:
                   f"{room.layout.floor_area_m2.value:.1f} sq m "
                   f"(connected={room.connected})")
             photos = load_photos(input_path / room.name)
+            _run_capture_quality_check(photos, room.layout)
             per_room_damage[room.name] = _run_damage_scan(photos, room.layout)
         for w in property_layout.warnings:
             print(f"[roomscan] warning: {w}")

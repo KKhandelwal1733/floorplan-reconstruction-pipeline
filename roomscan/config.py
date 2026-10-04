@@ -137,6 +137,19 @@ VIDEO_PLANE_THRESH_FRAC = 0.02        # plane-RANSAC threshold as a fraction of 
 # revisit with more real video/LiDAR comparison pairs (see derive_tiers.py).
 VIDEO_EMPIRICAL_MIN_REL_HW = 0.85
 
+# --- Capture-quality flags (case-study realignment): mirror/glass/wet-look/
+# low-light detection in submitted frames. Crude colour heuristics, same
+# spirit as the damage detector: flags candidates for human review, not a
+# classifier (no labelled imagery exists to train/validate one against).
+CAPTURE_QUALITY_LOW_LIGHT_V_THRESH = 0.25   # mean frame brightness (HSV V, 0-1) below this -> low light
+# Specular glare (near-saturated-bright + desaturated pixels) is a common,
+# simple proxy for reflective/glass/mirror/wet-look surfaces: light bounces
+# straight back at the camera instead of scattering, blowing out brightness
+# while washing out colour.
+CAPTURE_QUALITY_GLARE_V_THRESH = 0.95
+CAPTURE_QUALITY_GLARE_S_THRESH = 0.15
+CAPTURE_QUALITY_GLARE_FRAC_THRESH = 0.05    # frame-area fraction of glare pixels to flag
+
 # --- Damage detection (Phase 10): crude colour heuristic, advisory only ---
 # No trained classifier exists here (would need labelled damage imagery this
 # project has none of) -- this flags dark, desaturated blobs that deviate

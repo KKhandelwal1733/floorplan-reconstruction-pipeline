@@ -90,7 +90,7 @@ the project's hard rule against fabricating numbers).
 |---|---|
 | Handheld consumer capture only; any pretrained model/dataset/API with disclosure; no infra calls | **done** — no trained models used at all (`docs/model_registry.md`), fully offline, disclosed in `DISCLOSURES.md` |
 | Weights/large binaries fetched by script or volume | **done (trivially)** — no model weights exist to fetch |
-| Cover mirrors, glass, wet-look surfaces, low light in submission | **not done** — quality gate currently only checks point density/count; no detection of these specific failure modes yet |
+| Cover mirrors, glass, wet-look surfaces, low light in submission | **done** (heuristic-level) — `roomscan/geometry/capture_quality.py` flags low light (mean frame brightness) and specular glare (bright+desaturated pixel fraction, a proxy for mirrors/glass/wet surfaces) per frame across all three tiers, widening CIs and lowering `quality_score` when flagged, same pattern as the damage detector: a crude colour heuristic for human review, not a trained classifier |
 
 ## Summary
 
@@ -100,11 +100,12 @@ compliance coverage / 10% head-to-head / 5% capture route / 5% process evidence)
 - **Hard-blocked by lack of device access** (no further engineering can close these):
   benchmark accuracy (15%), head-to-head (10%), and the ground-truth-dependent rows
   within gates/deliverables.
-- **In active remediation** (tracked, buildable without device access):
-  mirror/glass/low-light quality-gate detection, reproduction bundle, error budget +
-  bias/variance report sections, CLI contract match, `report.md` wiring.
+- **In active remediation** (tracked, buildable without device access): reproduction
+  bundle, error budget + bias/variance report sections, CLI contract match, `report.md`
+  wiring.
 - **Done**: fix loop, process evidence, device matrix, this matrix, model/data
   disclosures, multi-room door-to-door pose-graph stitching (all three tiers;
   unvalidated against ground truth, no fixture exists), drift on/off ablation
   (synthetic ring, confirms the correction mechanism works; real-world accuracy
-  still not measured).
+  still not measured), mirror/glass/wet-surface/low-light capture-quality flags
+  (heuristic, all three tiers).
