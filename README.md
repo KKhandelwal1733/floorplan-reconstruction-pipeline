@@ -5,10 +5,12 @@ stitched floor plans with confidence intervals, damage flags, and scope line
 items. Built as an applied-AI case study, scored live against a laser
 measurer.
 
-See `docs/PROTOCOL.md` for field capture instructions, `COMPLIANCE.md` for
+See `docs/PROTOCOL.md` for field capture instructions, `DEVICE_MATRIX.md` for
+which tier runs on which hardware and its honest accuracy, `COMPLIANCE.md` for
 what the output actually means and its documented limitations,
-`DISCLOSURES.md` for dependencies/data/AI-assistance provenance, and
-`docs/TECHNICAL_REPORT.md` for the full project writeup.
+`COMPLIANCE_MATRIX.md` for the literal requirement-by-requirement status against
+the case study brief, `DISCLOSURES.md` for dependencies/data/AI-assistance
+provenance, and `docs/TECHNICAL_REPORT.md` for the full project writeup.
 
 ## Quickstart
 

@@ -61,6 +61,17 @@ Outputs are **estimates**, not certified surveys.
   exists to prompt human review, not to diagnose. Human review required
   before any remediation decision.
 
+## Benchmark Data Access
+
+No iPhone, tape measure, or laser measurer is currently available to this project.
+This blocks, until device access exists: the case-study-specified benchmark set
+(multi-room capture, staged-damage room, same rooms at all three tiers, genuine
+repeat captures), the head-to-head comparison against an incumbent app, and any
+laser/tape ground truth. See `COMPLIANCE_MATRIX.md` for exactly which requirements
+this affects and which remain open regardless. Nothing in this section is worked
+around by assumption or estimation — every affected gate is marked `not measured`
+with this reason, per the project's hard rule against fabricating numbers.
+
 ## Not a Substitute For
 Professional structural assessment, licensed surveying, or building-code inspection.
 
