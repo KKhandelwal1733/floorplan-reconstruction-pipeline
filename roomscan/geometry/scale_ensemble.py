@@ -33,10 +33,11 @@ class ScaleEstimate:
 def estimate_scale_ensemble(
     pts_unscaled: np.ndarray,
     poses: list[FramePose] | None = None,
+    min_points: int = VIDEO_MIN_RECONSTRUCTED_PTS,
 ) -> list[ScaleEstimate]:
     """Return independent scale-factor candidates (unscaled-units -> metres)."""
     estimates: list[ScaleEstimate] = []
-    if len(pts_unscaled) < VIDEO_MIN_RECONSTRUCTED_PTS:
+    if len(pts_unscaled) < min_points:
         return estimates
 
     # (1) room-footprint-diagonal prior: crude but always available.

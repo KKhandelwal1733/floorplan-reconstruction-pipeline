@@ -15,7 +15,24 @@ Outputs are **estimates**, not certified surveys.
   `VIDEO_EMPIRICAL_MIN_REL_HW`), not a small percentage — intervals are
   widened accordingly, but accuracy should be treated as unvalidated and
   this tier used with caution until more real comparisons exist.
-- Photo tier: ±10 cm typical; no depth sensor, inference only.
+- Photo tier: 2-8 unordered stills per room, no depth/poses. Reuses the
+  video tier's monocular SfM core, but matches ALL photo pairs (not just
+  consecutive) and reconstructs from only the single best-matching pair,
+  since stills taken seconds apart during a walkthrough often share far
+  less visual overlap than a video's consecutive frames. In testing with
+  simulated photo sets (derived from the real video, since no real
+  multi-room photo fixture exists), reconstruction frequently abstains
+  outright (insufficient shared structure to find a floor plane at all) at
+  realistic counts (6-8 photos), and succeeded in only one of several
+  simulated trials (n=12), with ~94% floor-area error against LiDAR
+  pseudo-ground-truth. This is the most honest and least validated of the
+  three tiers; treat any output as a rough approximation and expect
+  frequent abstention rather than a number, never a crash either way.
+- Multi-room stitching is schematic only: each room's shape/area is
+  independently reconstructed, but this tool does not determine true
+  relative room position or orientation (no real multi-room fixture exists
+  to validate cross-room feature matching against). Rooms are laid out on
+  a simple non-overlapping grid for visualization, not a geometric stitch.
 - Damage classification is advisory. Human review required before remediation decisions.
 
 ## Not a Substitute For

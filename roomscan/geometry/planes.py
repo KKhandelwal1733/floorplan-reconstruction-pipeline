@@ -114,6 +114,7 @@ def find_floor_ceiling(
     gravity: np.ndarray | None = None,
     subsample: int = 50_000,
     thresh: float = 0.05,
+    min_inliers: int = 200,
 ) -> tuple[
     tuple[np.ndarray, float, np.ndarray] | None,
     tuple[np.ndarray, float, np.ndarray] | None,
@@ -137,10 +138,10 @@ def find_floor_ceiling(
 
     for _ in range(4):  # find up to 4 horizontal planes
         available = ~used
-        if available.sum() < 500:
+        if available.sum() < min_inliers:
             break
         result = ransac_horizontal_plane(
-            sub[available], gravity, thresh=thresh
+            sub[available], gravity, thresh=thresh, min_inliers=min_inliers
         )
         if result is None:
             break

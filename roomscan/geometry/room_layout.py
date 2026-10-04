@@ -164,15 +164,23 @@ def _wall_segments(hull: list[tuple[float, float]]) -> list[WallSegment]:
 def extract_layout(
     pts: np.ndarray,
     floor_subsample: int = 20_000,
+    min_plane_inliers: int = 200,
 ) -> RoomLayout:
     """Given a fused (N,3) point cloud, return the room layout.
 
     Args:
-        pts:             World-frame point cloud from load_scan().
-        floor_subsample: How many floor inliers to use for polygon computation.
+        pts:               World-frame point cloud from load_scan().
+        floor_subsample:   How many floor inliers to use for polygon computation.
+        min_plane_inliers: Minimum RANSAC inliers to accept a floor/ceiling
+                            plane. The default (200) assumes a dense LiDAR/
+                            video point cloud; a sparse photo-tier best-pair
+                            reconstruction (tens of points) needs this much
+                            lower to find any plane at all -- callers using
+                            that sparse a cloud should lower it explicitly
+                            (and expect correspondingly low-confidence output).
     """
     gravity = detect_gravity(pts)
-    floor, ceiling = find_floor_ceiling(pts, gravity=gravity)
+    floor, ceiling = find_floor_ceiling(pts, gravity=gravity, min_inliers=min_plane_inliers)
 
     if floor is None:
         raise ValueError("Could not detect floor plane in point cloud.")

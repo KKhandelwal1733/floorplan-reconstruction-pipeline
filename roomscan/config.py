@@ -60,6 +60,32 @@ VIDEO_ASSUMED_DIAGONAL_M = 7.5        # typical room's full 3-D bbox diagonal (f
                                        # + height combined via Pythagoras, not just floor footprint)
 VIDEO_ASSUMED_CAMERA_HEIGHT_M = 1.3   # typical handheld phone height above floor
 VIDEO_DEFAULT_SCALE_REL_HW = 0.30     # fallback relative CI half-width if ensemble has 1 estimate
+VIDEO_DRIFT_ABLATION_FRAME_COUNTS = [5, 10, 20, 40]  # chain lengths tested by bench/ablate.py
+
+# --- Photo tier (Phase 8): 2-8 unordered stills per room, no depth/poses ---
+PHOTO_MIN_PHOTOS = 2
+PHOTO_MAX_PHOTOS = 8
+# No real multi-room photo fixture exists to calibrate this against (unlike
+# the video tier's single real example). Set conservatively at/above the
+# video tier's empirical floor, since fewer, unordered stills give the same
+# reconstruction method strictly less information to work with -- revisit
+# once real photo-tier data is available.
+PHOTO_EMPIRICAL_MIN_REL_HW = 0.90
+# A single two-view (best_pair) reconstruction inherently has far fewer
+# triangulated points than the video tier's many-pair accumulation -- don't
+# reuse that tier's point-count floor.
+PHOTO_MIN_RECONSTRUCTED_PTS = 5
+# extract_layout's floor/ceiling RANSAC defaults to min_inliers=200 (tuned for
+# dense LiDAR/video clouds); a sparse best_pair reconstruction needs this much
+# lower just to attempt plane detection at all. Confidence at this point
+# count is inherently low -- PHOTO_EMPIRICAL_MIN_REL_HW above is what keeps
+# that honest, not this threshold.
+PHOTO_MIN_PLANE_INLIERS = 5
+# Multi-room stitcher (roomscan/geometry/multi_room.py): best-effort cross-
+# room matching, falling back to grid placement when it doesn't find enough
+# shared structure between two rooms' photos (e.g. a shared doorway view).
+MULTI_ROOM_MIN_MATCHES = 30
+MULTI_ROOM_GRID_GAP_M = 1.0   # gap between rooms placed on the fallback grid
 VIDEO_PLANE_THRESH_FRAC = 0.02        # plane-RANSAC threshold as a fraction of the cloud's bbox diagonal
                                        # (the unscaled cloud has no metric units yet, so a fixed-metre
                                        # threshold like RANSAC_THRESH_M is meaningless here)

@@ -70,7 +70,84 @@ def compare_video_to_lidar(scan_dir: Path, lidar_frame_stride: int = 5) -> dict[
     return result
 
 
+def derive_simulated_photos(video_path: Path, n_photos: int = 6) -> list:
+    """Extract n_photos evenly-spaced stills from a real video as a stand-in
+    for a real photo-tier capture (no real multi-room photo fixture exists).
+    Clearly labelled simulated=True wherever used -- these are real frames
+    from a real room, but not an actual independent still-camera capture.
+    """
+    from roomscan.io.video_loader import sample_frames
+
+    import cv2
+    cap = cv2.VideoCapture(str(video_path))
+    try:
+        duration_s = cap.get(cv2.CAP_PROP_FRAME_COUNT) / max(cap.get(cv2.CAP_PROP_FPS), 1e-6)
+    finally:
+        cap.release()
+    interval_s = duration_s / n_photos if n_photos > 0 else duration_s
+    return sample_frames(video_path, interval_s=interval_s, max_frames=n_photos)
+
+
+def compare_photo_to_lidar(
+    scan_dir: Path, n_photos: int = 6, lidar_frame_stride: int = 5,
+) -> dict[str, Any]:
+    """Compare a SIMULATED photo-tier reconstruction (stills derived from the
+    scan's own rgb.mp4) against LiDAR-tier pseudo-ground-truth.
+
+    simulated=True: unlike compare_video_to_lidar, this is NOT a genuine
+    independent photo capture -- it's the fallback the brief anticipated,
+    used because no real multi-room photo fixture exists yet.
+    """
+    from roomscan.config import (
+        PHOTO_EMPIRICAL_MIN_REL_HW,
+        PHOTO_MIN_PLANE_INLIERS,
+        PHOTO_MIN_RECONSTRUCTED_PTS,
+    )
+    from roomscan.geometry.room_layout import extract_layout
+    from roomscan.geometry.video_tier import reconstruct_from_frames
+    from roomscan.io.stray_scanner import load_scan
+
+    scan_dir = Path(scan_dir)
+    video_path = scan_dir / "rgb.mp4"
+    if not video_path.exists():
+        raise FileNotFoundError(f"{video_path} not found -- scan_dir must be a Stray Scanner export")
+
+    lidar_pts = load_scan(scan_dir, frame_stride=lidar_frame_stride)
+    lidar_layout = extract_layout(lidar_pts)
+
+    photos = derive_simulated_photos(video_path, n_photos=n_photos)
+    photo_layout, diagnostics = reconstruct_from_frames(
+        photos, min_rel_hw=PHOTO_EMPIRICAL_MIN_REL_HW, detector="sift",
+        strategy="best_pair", min_points=PHOTO_MIN_RECONSTRUCTED_PTS,
+        min_plane_inliers=PHOTO_MIN_PLANE_INLIERS,
+    )
+
+    result: dict[str, Any] = {
+        "scan_dir": str(scan_dir),
+        "simulated": True,  # stills derived from rgb.mp4, not an independent photo capture
+        "n_photos": n_photos,
+        "pseudo_ground_truth": "lidar_tier_geometry (not laser-measured)",
+        "lidar_floor_area_m2": lidar_layout.floor_area_m2.value,
+        "photo_floor_area_m2": photo_layout.floor_area_m2.value,
+        "floor_area_rel_err": _rel_err(
+            lidar_layout.floor_area_m2.value, photo_layout.floor_area_m2.value
+        ),
+        "photo_scale_factor": diagnostics["scale_factor"],
+        "photo_scale_rel_half_width": diagnostics["scale_rel_half_width"],
+        "photo_n_points_unscaled": diagnostics["n_points_unscaled"],
+    }
+    if lidar_layout.ceiling_height_m and photo_layout.ceiling_height_m:
+        result["lidar_ceiling_height_m"] = lidar_layout.ceiling_height_m.value
+        result["photo_ceiling_height_m"] = photo_layout.ceiling_height_m.value
+        result["ceiling_height_rel_err"] = _rel_err(
+            lidar_layout.ceiling_height_m.value, photo_layout.ceiling_height_m.value
+        )
+    return result
+
+
 if __name__ == "__main__":
     scan_dir = Path(sys.argv[1]) if len(sys.argv) > 1 else Path("tests/fixtures/single_room")
-    result = compare_video_to_lidar(scan_dir)
-    print(json.dumps(result, indent=2))
+    print("--- video tier vs LiDAR (real) ---")
+    print(json.dumps(compare_video_to_lidar(scan_dir), indent=2))
+    print("\n--- photo tier vs LiDAR (simulated stills) ---")
+    print(json.dumps(compare_photo_to_lidar(scan_dir), indent=2))

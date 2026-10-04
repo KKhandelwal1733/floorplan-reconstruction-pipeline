@@ -1,4 +1,4 @@
-.PHONY: install test lint demo bench
+.PHONY: install test lint demo bench ablate
 
 install:
 	pip install -e ".[dev]"
@@ -14,3 +14,6 @@ demo:
 
 bench:
 	python -m bench.harness
+
+ablate:
+	python -m bench.ablate tests/fixtures/single_room

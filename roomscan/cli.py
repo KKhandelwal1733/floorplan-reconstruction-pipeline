@@ -66,6 +66,27 @@ def _run_video(input_path: Path, out: Path) -> None:
         print(f"[roomscan] video tier failed: {exc}")
 
 
+def _run_photo(input_path: Path, out: Path) -> None:
+    print(f"[roomscan] loading property folder: {input_path}")
+    try:
+        from roomscan.geometry.photo_tier import process_property
+        from roomscan.render.svg_plan import render_property
+        property_layout, diagnostics = process_property(input_path)
+        render_property(property_layout, out / "plan.svg")
+        print(f"[roomscan] {diagnostics['n_rooms_reconstructed']}/{diagnostics['n_rooms_found']} "
+              f"room(s) reconstructed")
+        for room in property_layout.rooms:
+            print(f"[roomscan]   room '{room.name}': "
+                  f"{room.layout.floor_area_m2.value:.1f} sq m "
+                  f"(connected={room.connected})")
+        for w in property_layout.warnings:
+            print(f"[roomscan] warning: {w}")
+    except Exception as exc:
+        from roomscan.render.svg_plan import render_stub
+        render_stub(out / "plan.svg", f"Photo tier error: {exc}")
+        print(f"[roomscan] photo tier failed: {exc}")
+
+
 def _print_layout_summary(layout) -> None:
     print(f"[roomscan] floor area: {layout.floor_area_m2.value:.1f} sq m")
     if layout.ceiling_height_m:
@@ -93,9 +114,7 @@ def main(argv: list[str] | None = None) -> int:
     elif tier == "video":
         _run_video(args.input_path, args.out)
     else:
-        from roomscan.render.svg_plan import render_stub
-        render_stub(args.out / "plan.svg", "Photo tier not implemented yet (Phase 8).")
-        print("[roomscan] photo tier not implemented yet (Phase 8)")
+        _run_photo(args.input_path, args.out)
 
     print(f"[roomscan] -> {args.out}/plan.svg")
     return 0
