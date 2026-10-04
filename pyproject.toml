@@ -1,0 +1,21 @@
+[project]
+name = "roomscan"
+version = "0.1.0"
+description = "Dimensioned floor plan reconstruction from iPhone LiDAR/video/photo captures"
+requires-python = ">=3.10"
+dependencies = [
+    "pydantic>=2",
+    "jsonschema>=4",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7",
+]
+
+[tool.setuptools.packages.find]
+include = ["roomscan*"]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"

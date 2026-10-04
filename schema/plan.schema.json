@@ -1,0 +1,138 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://roomscan.local/schema/plan.schema.json",
+  "title": "roomscan plan output (v0.1, in-house draft; no published schema was supplied)",
+  "type": "object",
+  "required": ["schema_version", "capture", "property", "rooms"],
+  "properties": {
+    "schema_version": { "const": "0.1" },
+    "capture": {
+      "type": "object",
+      "required": ["tier", "status"],
+      "properties": {
+        "tier": { "enum": ["lidar", "video", "photo"] },
+        "status": { "enum": ["ok", "degraded", "abstained"] },
+        "warnings": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "property": {
+      "type": "object",
+      "required": ["rooms", "adjacency", "footprint_m2"],
+      "properties": {
+        "rooms": { "type": "array", "items": { "type": "string" } },
+        "adjacency": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["a", "b", "via", "confidence"],
+            "properties": {
+              "a": { "type": "string" },
+              "b": { "type": "string" },
+              "via": { "type": "string" },
+              "confidence": { "type": "number", "minimum": 0, "maximum": 1 }
+            }
+          }
+        },
+        "footprint_m2": { "$ref": "#/$defs/measurement" }
+      }
+    },
+    "rooms": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/room" }
+    }
+  },
+  "$defs": {
+    "measurement": {
+      "type": "object",
+      "required": ["value", "lo", "hi", "confidence_level"],
+      "properties": {
+        "value": { "type": "number" },
+        "lo": { "type": "number" },
+        "hi": { "type": "number" },
+        "confidence_level": { "type": "number", "minimum": 0, "maximum": 1, "default": 0.9 }
+      }
+    },
+    "pose": {
+      "type": "object",
+      "required": ["x", "y", "yaw"],
+      "properties": {
+        "x": { "type": "number" },
+        "y": { "type": "number" },
+        "yaw": { "type": "number" }
+      }
+    },
+    "wall": {
+      "type": "object",
+      "required": ["id", "length_m"],
+      "properties": {
+        "id": { "type": "string" },
+        "length_m": { "$ref": "#/$defs/measurement" }
+      }
+    },
+    "opening": {
+      "type": "object",
+      "required": ["id", "type", "wall", "width_m", "confidence"],
+      "properties": {
+        "id": { "type": "string" },
+        "type": { "enum": ["door", "window"] },
+        "wall": { "type": "string" },
+        "width_m": { "$ref": "#/$defs/measurement" },
+        "confidence": { "type": "number", "minimum": 0, "maximum": 1 }
+      }
+    },
+    "damage_flag": {
+      "type": "object",
+      "required": ["rule_id", "text"],
+      "properties": {
+        "rule_id": { "type": "string" },
+        "text": { "type": "string" },
+        "evidence": {}
+      }
+    },
+    "damage": {
+      "type": "object",
+      "required": ["id", "surface_id", "class", "area_m2"],
+      "properties": {
+        "id": { "type": "string" },
+        "surface_id": { "type": "string" },
+        "class": { "type": "string" },
+        "area_m2": { "$ref": "#/$defs/measurement" },
+        "extent": { "type": "object" },
+        "flags": { "type": "array", "items": { "$ref": "#/$defs/damage_flag" } }
+      }
+    },
+    "scope_item": {
+      "type": "object",
+      "required": ["item", "surface_id", "qty", "unit"],
+      "properties": {
+        "item": { "type": "string" },
+        "surface_id": { "type": "string" },
+        "qty": { "type": "number" },
+        "unit": { "type": "string" }
+      }
+    },
+    "room": {
+      "type": "object",
+      "required": ["id", "polygon", "pose", "walls", "ceiling_height_m", "floor_area_m2", "openings"],
+      "properties": {
+        "id": { "type": "string" },
+        "polygon": {
+          "type": "array",
+          "items": {
+            "type": "array",
+            "items": { "type": "number" },
+            "minItems": 2,
+            "maxItems": 2
+          }
+        },
+        "pose": { "$ref": "#/$defs/pose" },
+        "walls": { "type": "array", "items": { "$ref": "#/$defs/wall" } },
+        "ceiling_height_m": { "$ref": "#/$defs/measurement" },
+        "floor_area_m2": { "$ref": "#/$defs/measurement" },
+        "openings": { "type": "array", "items": { "$ref": "#/$defs/opening" } },
+        "damage": { "type": "array", "items": { "$ref": "#/$defs/damage" } },
+        "scope": { "type": "array", "items": { "$ref": "#/$defs/scope_item" } }
+      }
+    }
+  }
+}
