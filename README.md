@@ -22,6 +22,8 @@ make bench     # gate table + real video-vs-LiDAR comparison, against whatever
                # real fixtures are present
 make ablate    # drift ablation (does chain length affect video-tier error?)
 make calibrate # conformal calibration across tiers
+make repro     # replay plan.json from cache/ (or populate it), verify determinism
+make live      # full live path on the sample scan, cache/ bypassed entirely
 ```
 
 ## One command, three tiers
@@ -83,7 +85,7 @@ roomscan/
   render/svg_plan.py           # dimensioned SVG rendering
 
 bench/           # harness.py (gates), derive_tiers.py, ablate.py, calibrate.py,
-                 # fixloop_ceiling_check.py -- all runnable, all regenerate
+                 # fixloop_ceiling_check.py, repro.py -- all runnable, all regenerate
                  # real numbers, never fabricated
 schema/plan.schema.json   # JSON Schema for plan.json, v0.1
 tests/           # pytest suite; real-data tests skip cleanly when gitignored

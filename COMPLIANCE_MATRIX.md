@@ -78,8 +78,8 @@ the project's hard rule against fabricating numbers).
 |---|---|---|---|
 | 1 | Compliance matrix | `COMPLIANCE_MATRIX.md` (this file) | **done** |
 | 2 | Capture route + device matrix | `docs/PROTOCOL.md`, `DEVICE_MATRIX.md` | **partial** — device matrix done, protocol needs polish |
-| 3 | Repo + README, <15 min fresh-machine run, one command/capture | `README.md` | **partial** — not time-verified on a clean machine; CLI command doesn't match literal contract |
-| 4 | Reproduction bundle (cache replay + live path, both regenerate every number) | — | **not done** — no `cache/`, no `make repro`/`make live` |
+| 3 | Repo + README, <15 min fresh-machine run, one command/capture | `README.md` | **partial** — CLI command now matches the literal contract exactly (`python -m roomscan run ...`); still not time-verified on a clean machine |
+| 4 | Reproduction bundle (cache replay + live path, both regenerate every number) | `bench/repro.py`, `cache/` | **done** — `make repro` replays `plan.json` from `cache/` (or computes once and populates it), `make live` always recomputes; verified byte-identical across a cache replay + 2 independent live runs on the real `single_room` fixture (see `tests/test_repro.py`) |
 | 5 | Benchmark report: gates all 3 tiers, repeatability table, head-to-head table, timing | `bench/harness.py` | **partial** — gate table exists (mostly `not measured`, honestly); no dedicated repeatability table artifact beyond the pass/fail gate; no head-to-head table (blocked); no per-tier/stage timing measurements |
 | 6 | Fix loop bundle | `DECLARATION.md`, `bench/fixloop_ceiling_check.py` | **done** (see Part 4 caveat) |
 | 7 | Technical report, max 6 pages | `docs/TECHNICAL_REPORT.md` | **partial** — missing an explicit error-budget section and the bias-vs-variance ceiling diagnosis |
@@ -101,11 +101,12 @@ compliance coverage / 10% head-to-head / 5% capture route / 5% process evidence)
 - **Hard-blocked by lack of device access** (no further engineering can close these):
   benchmark accuracy (15%), head-to-head (10%), and the ground-truth-dependent rows
   within gates/deliverables.
-- **In active remediation** (tracked, buildable without device access): reproduction
-  bundle, error budget + bias/variance report sections.
+- **In active remediation** (tracked, buildable without device access): error budget +
+  bias/variance report sections.
 - **Done**: fix loop, process evidence, device matrix, this matrix, model/data
   disclosures, multi-room door-to-door pose-graph stitching (all three tiers;
   unvalidated against ground truth, no fixture exists), drift on/off ablation
   (synthetic ring, confirms the correction mechanism works; real-world accuracy
   still not measured), mirror/glass/wet-surface/low-light capture-quality flags
-  (heuristic, all three tiers), literal CLI command contract, `report.md` wiring.
+  (heuristic, all three tiers), literal CLI command contract, `report.md` wiring,
+  reproduction bundle (`make repro`/`make live`, verified byte-identical).

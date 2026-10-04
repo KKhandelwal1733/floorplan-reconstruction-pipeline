@@ -1,4 +1,4 @@
-.PHONY: setup install test lint demo bench ablate calibrate
+.PHONY: setup install test lint demo bench ablate calibrate repro live
 
 setup: install
 
@@ -22,3 +22,13 @@ ablate:
 
 calibrate:
 	python -m bench.calibrate
+
+# Reproduction bundle (see bench/repro.py docstring): replays plan.json from
+# cache/ if present (else computes once and populates it), then runs the
+# full live path twice more and checks all three outputs are byte-identical.
+repro:
+	python -m bench.repro repro tests/fixtures/single_room lidar
+
+# Full live path: always recomputes from raw inputs, cache/ untouched.
+live:
+	python -m bench.repro live tests/fixtures/single_room lidar
