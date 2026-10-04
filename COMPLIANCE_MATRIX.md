@@ -46,7 +46,7 @@ the project's hard rule against fabricating numbers).
 | Gate | Status |
 |---|---|
 | Opening widths ≤2cm on ≥85%, detection scored (miss+phantom) | **not measured** — no ground truth |
-| Ceiling height ≤1.5cm/room; spread ≤1cm across repeats; bias-vs-variance stated | **not measured** — no ground truth, no real repeat captures. Bias/variance framework not yet written into the technical report (tracked) |
+| Ceiling height ≤1.5cm/room; spread ≤1cm across repeats; bias-vs-variance stated | **partial** — absolute error still **not measured** (no laser ground truth, no real repeat captures); bias-vs-variance is now stated honestly in `docs/TECHNICAL_REPORT.md` §6, grounded in real split-scan repeatability (variance) and video-vs-LiDAR comparison (bias proxy) numbers, including a new finding: `single_room` fails the project's own 5% repeatability threshold |
 | Repeatability ≤1cm or 0.5%/wall | **partial** — proxy gate (above) passes against real data; literal gate **not measured** |
 | Drift accountability: report states approach + on/off ablation on stitched footprint | **done** (mechanism-level, not real-world) — `bench/ablate.py::run_pose_graph_drift_ablation` builds a synthetic 4-room square ring with a held-out loop-closure edge, injects Gaussian door-position noise on the other 3 edges at increasing std-dev, and compares naive sequential placement (`refine=False`) against the joint Huber-robust least-squares solve (`refine=True`). Naive error grows with injected noise (0.147m → 0.346m RMS over 20 trials/level); joint refinement damps it (0.147m → 0.209m), confirming the loop-closure mechanism actually reduces drift. Labelled `synthetic: true` throughout — no real multi-room capture (any tier) exists to run this against ground truth instead |
 | Photo-tier whole-property stitch, ±8% calibrated, correct adjacency, no overlaps | **partial** — real pose-graph stitch now attempted (see Part 1/2 above); accuracy against the ±8% gate still **not measured** (no real multi-room photo fixture) |
@@ -82,7 +82,7 @@ the project's hard rule against fabricating numbers).
 | 4 | Reproduction bundle (cache replay + live path, both regenerate every number) | `bench/repro.py`, `cache/` | **done** — `make repro` replays `plan.json` from `cache/` (or computes once and populates it), `make live` always recomputes; verified byte-identical across a cache replay + 2 independent live runs on the real `single_room` fixture (see `tests/test_repro.py`) |
 | 5 | Benchmark report: gates all 3 tiers, repeatability table, head-to-head table, timing | `bench/harness.py` | **partial** — gate table exists (mostly `not measured`, honestly); no dedicated repeatability table artifact beyond the pass/fail gate; no head-to-head table (blocked); no per-tier/stage timing measurements |
 | 6 | Fix loop bundle | `DECLARATION.md`, `bench/fixloop_ceiling_check.py` | **done** (see Part 4 caveat) |
-| 7 | Technical report, max 6 pages | `docs/TECHNICAL_REPORT.md` | **partial** — missing an explicit error-budget section and the bias-vs-variance ceiling diagnosis |
+| 7 | Technical report, max 6 pages | `docs/TECHNICAL_REPORT.md` | **done** — now includes an explicit error-budget section (§5, literal source-by-source map, honest about what's not decomposed) and a bias-vs-variance diagnosis (§6, grounded in real repeatability + video-vs-LiDAR numbers); page count not yet verified against the 6-page limit |
 | 8 | Raw benchmark data: sensor logs, ground truth, app exports | — | **not measured** — no device access |
 
 ## Constraints
@@ -101,12 +101,11 @@ compliance coverage / 10% head-to-head / 5% capture route / 5% process evidence)
 - **Hard-blocked by lack of device access** (no further engineering can close these):
   benchmark accuracy (15%), head-to-head (10%), and the ground-truth-dependent rows
   within gates/deliverables.
-- **In active remediation** (tracked, buildable without device access): error budget +
-  bias/variance report sections.
 - **Done**: fix loop, process evidence, device matrix, this matrix, model/data
   disclosures, multi-room door-to-door pose-graph stitching (all three tiers;
   unvalidated against ground truth, no fixture exists), drift on/off ablation
   (synthetic ring, confirms the correction mechanism works; real-world accuracy
   still not measured), mirror/glass/wet-surface/low-light capture-quality flags
   (heuristic, all three tiers), literal CLI command contract, `report.md` wiring,
-  reproduction bundle (`make repro`/`make live`, verified byte-identical).
+  reproduction bundle (`make repro`/`make live`, verified byte-identical), error
+  budget + bias/variance diagnosis in the technical report.

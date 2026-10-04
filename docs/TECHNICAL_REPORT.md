@@ -151,7 +151,97 @@ correction, is in `DECLARATION.md` and reproducible via
 | Typical outcome | Confident measurement | Confident but wide-CI measurement | Frequent honest abstention |
 | CI mechanism | RANSAC inlier residuals + quality gate | Empirical floor (`VIDEO_EMPIRICAL_MIN_REL_HW=0.85`) | Empirical floor (`PHOTO_EMPIRICAL_MIN_REL_HW=0.90`) |
 
-## 5. Benchmark Data Situation
+## 5. Error Budget
+
+Every `Measurement` carries a confidence interval, but the project does not
+(yet) decompose that interval into an additive budget across independent
+noise sources — each CI is a **max/floor over whichever single signal is
+most conservative** for that measurement, not a quadrature sum. The table
+below names every contributor actually present in the code and whether it's
+modeled:
+
+| Source | Where | Modeled in CI? |
+|---|---|---|
+| Plane-fit / sensor noise (RANSAC inlier spread) | `roomscan/geometry/uncertainty.py::measurement_from_inliers` (all tiers) | Yes — the base mechanism for every measurement |
+| View coverage / point density | Quality gate (`QUALITY_MIN_FLOOR_INLIERS`, `QUALITY_MIN_PTS_PER_M2`) | Yes — widens CI by `QUALITY_CI_WIDEN_FACTOR` when triggered |
+| Capture-quality issues (low light, mirror/glass/wet-look glare) | `roomscan/geometry/capture_quality.py` | Yes — widens CI by the same factor when flagged |
+| Scale-recovery disagreement (video/photo) | `scale_ensemble.py::combine_estimates`, ensemble spread | Yes, but see Section 6 — this signal has been observed to *underestimate* real error on its own |
+| Systematic monocular-SfM bias (no bundle adjustment) | video/photo tiers | Only indirectly, via the hand-set empirical floor (`VIDEO_/PHOTO_EMPIRICAL_MIN_REL_HW`) — not decomposed from the sources above |
+| Multi-room pose-graph placement error | `roomscan/geometry/pose_graph.py` | Not at all — a placed room's pose carries no CI of its own; `has_overlap` rejects implausible placements but doesn't bound plausible ones. The synthetic drift ablation (`bench/ablate.py`) demonstrates the correction *mechanism* works, not a measured real-world placement error |
+| Device/sensor calibration error (camera intrinsics, LiDAR depth bias) | Not modeled anywhere | No — would require laser ground truth to even estimate, which doesn't exist for this project (Section 7) |
+
+A fully decomposed, additive error budget (`total_variance = sensor² +
+coverage² + scale² + ...`, each term independently calibrated) is the
+natural next step, but requires per-source ground truth this project
+doesn't have — the same blocking constraint as conformal calibration
+(Section 8). What's delivered here is the literal map above: every named
+source, and an honest accounting of which ones the current CI mechanism
+actually responds to.
+
+## 6. Bias vs. Variance Diagnosis
+
+**Variance** (repeat-measurement spread, no ground truth needed) is directly
+measurable via the split-scan repeatability gate (two interleaved frame
+subsets of the same physical capture). Run fresh against all three real
+fixtures for this report (`python -m bench.harness`):
+
+| Fixture | Floor-area spread | Wall-perimeter spread | Gate (≤5%/≤5%) |
+|---|---|---|---|
+| `real_floor_only` | 0.9% | 0.5% | PASS |
+| `real_with_ceiling` | 1.3% | 0.6% | PASS |
+| `single_room` | 6.0% | 1.8% | **FAIL** (area) |
+
+This is a genuine, previously-unreported finding, surfaced while assembling
+this section: `single_room`'s own split-scan repeatability had never
+actually been checked against the project's gate before (the passing test,
+`tests/test_repeatability.py`, runs against `real_floor_only`, not
+`single_room`). At the same methodology (two interleaved halves,
+`frame_stride=20`), `single_room` — the largest and most geometrically
+complex of the three real captures — fails the 5% area threshold. Variance
+is evidently capture-dependent, not a single constant the project can claim
+once and reuse; this is now also logged under Known Limitations (Section
+10) rather than only here.
+
+**Bias** (systematic offset from the true room) cannot be measured directly
+— no laser/tape ground truth exists (Section 7), and even the LiDAR-tier
+"pseudo-ground-truth" used for cross-tier comparison is itself an assumed
+±1-2cm, not independently verified. What *can* be examined is whether the
+video tier's own reported uncertainty (ensemble spread) is consistent with
+its observed error against that pseudo-ground-truth — and the answer
+differs by capture, which matters more than either single number:
+
+- **`single_room`** (the case that originally motivated
+  `VIDEO_EMPIRICAL_MIN_REL_HW`): the scale ensemble's own spread, before a
+  floor was imposed, implied a narrower CI than the ~88% error actually
+  observed (4.4 vs 36.6 m² — see `config.py`). Three independent scale
+  priors agreeing with *each other* while all being wrong together is the
+  textbook signature of **bias dominating variance**: the error is shared
+  and systematic (every prior operates on the same underlying, un-bundle-
+  adjusted reconstruction), not estimator-to-estimator noise a wider
+  ensemble would average out.
+- **`real_floor_only`** (freshly measured for this report): the three scale
+  priors disagree sharply with *each other* (room-diagonal 0.297,
+  ceiling-height 0.579, camera-height 0.167 — a ~3.5x spread), correctly
+  driving the ensemble's own uncertainty up (~69% relative half-width,
+  close to the 85% hard floor) before the observed error (99.2%, 0.81 vs
+  97.3 m²) is even compared. Here the **variance signal is doing real
+  work** — the method is visibly uncertain about itself, not silently
+  confident while wrong. The residual gap between a ~69-85% CI and a 99%
+  actual error, combined with only 5,889 reconstructed sparse points for a
+  ~97 m² room, points to a *coverage* failure (too little of the room
+  triangulated at all) compounding the scale bias, not scale bias alone.
+
+**Conclusion:** bias and variance both contribute, and which one dominates
+is capture-dependent — this project does not have enough real examples (n=2
+captures with a synchronized video) to generalize further, and says so
+rather than extrapolating from either single case. The practical
+implication is unchanged from Section 3's Phase 7 finding: tightening the
+ensemble's variance estimate alone would not fix `single_room`'s case
+(bias-dominated), while `real_floor_only`'s case needs better reconstruction
+*coverage*, not just a wider scale CI. A proper bundle-adjusted
+reconstruction (Section 11.2) is the lever that addresses both.
+
+## 7. Benchmark Data Situation
 
 No tape or laser ground truth exists for this project — the user's own iPhone
 LiDAR/video/photo captures are the only real data available. Rather than
@@ -163,7 +253,7 @@ pseudo-ground-truth (clearly labelled as such everywhere it's used — see
 explicitly reported as `not measured` with the reason
 (`bench/harness.py::run_gates`), never estimated.
 
-## 6. Conformal Calibration Status
+## 8. Conformal Calibration Status
 
 Implemented and algorithmically validated, but **not yet statistically
 active**: with only 6 real calibration points (4 video, 2 photo) against a
@@ -175,7 +265,7 @@ calibration/factors.py` loads and applies a factor the moment one becomes
 achievable) as more real captures accumulate — not a deferred feature, a
 correctly-gated one.
 
-## 7. Determinism, Reproducibility, and Testing Discipline
+## 9. Determinism, Reproducibility, and Testing Discipline
 
 Every stage is seeded from a single `config.SEED`, and the Phase 6 RNG bug
 (Section 3) is the project's clearest illustration of why this matters in
@@ -202,7 +292,7 @@ clearly-labelled-simulated data, with real-data tests skipping cleanly
 rather than failing when the (gitignored, multi-hundred-megabyte) real
 fixtures aren't present on a given machine.
 
-## 8. Known Limitations
+## 10. Known Limitations
 
 - Video and photo tier accuracy is poor and should be treated as a rough
   approximation, not a measurement, until validated against more real data.
@@ -215,8 +305,14 @@ fixtures aren't present on a given machine.
   expect a high false-positive rate.
 - Conformal calibration cannot yet provide a statistically justified
   guarantee at this project's target confidence level.
+- Split-scan repeatability is capture-dependent, not a constant the project
+  can claim once: `single_room` fails the project's own 5% floor-area
+  repeatability threshold (6.0% measured — see Section 6), the first time
+  this specific fixture has been checked against that gate. The passing
+  repeatability claim in Section 3 (Phase 6) refers to `real_floor_only` and
+  `real_with_ceiling`, not this fixture.
 
-## 9. Recommendations for Future Work
+## 11. Recommendations for Future Work
 
 1. **More real captures, prioritized over more code.** Nearly every
    limitation above is a data problem, not an algorithm problem — the fix
@@ -233,3 +329,7 @@ fixtures aren't present on a given machine.
    validated against ground truth instead of only its own internal
    consistency (does the synthetic ablation's finding hold up on a real
    capture?).
+5. Investigate why `single_room` fails split-scan repeatability (Section 6)
+   while the other two real fixtures pass comfortably — is it room size,
+   opening count, or scan-path coverage that's driving the difference? A
+   single additional real capture can't answer this; several would start to.
