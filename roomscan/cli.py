@@ -16,9 +16,26 @@ def main(argv: list[str] | None = None) -> int:
 
     args.out.mkdir(parents=True, exist_ok=True)
 
-    # ponytail: stub — each phase replaces this with its stage call
-    render_stub(args.out / "plan.svg", f"roomscan stub — scan_dir={args.scan_dir}")
-    print(f"[roomscan] stub run complete → {args.out}/")
+    print(f"[roomscan] loading scan: {args.scan_dir}")
+    from roomscan.io.stray_scanner import load_scan
+    pts = load_scan(args.scan_dir, max_frames=None)
+    print(f"[roomscan] {len(pts):,} points loaded")
+
+    print("[roomscan] extracting layout …")
+    try:
+        from roomscan.geometry.room_layout import extract_layout
+        from roomscan.render.svg_plan import render_plan
+        layout = extract_layout(pts)
+        render_plan(layout, args.out / "plan.svg")
+        print(f"[roomscan] floor area: {layout.floor_area_m2.value:.1f} m²")
+        if layout.ceiling_height_m:
+            print(f"[roomscan] ceiling height: {layout.ceiling_height_m.value:.2f} m")
+    except Exception as exc:
+        from roomscan.render.svg_plan import render_stub
+        render_stub(args.out / "plan.svg", f"Layout error: {exc}")
+        print(f"[roomscan] layout failed: {exc}")
+
+    print(f"[roomscan] → {args.out}/plan.svg")
     return 0
 
 
