@@ -68,3 +68,46 @@ ad hoc one-off.
 - The fix will be implemented and tested next.
 - A second commit will record the "after" state: whether criterion 1 was met, the
   real before/after numbers, and the final test suite status.
+
+## Result (after)
+
+**Criterion 1 (real_with_ceiling detects its ceiling): met**, but not on the first
+attempt -- the process surfaced something the two-case check in this declaration
+didn't anticipate, and the fix was revised before being accepted. Recorded honestly:
+
+1. Implemented `interior_frac` exactly as declared (OR'd with the existing
+   `fill_ratio` check). Verified `real_with_ceiling` now detects its ceiling
+   (height 2.38 m) -- criterion 1 met.
+2. Re-ran the full real-data regression set (criterion 2) and found a **new
+   regression**: `real_floor_only` (confirmed via full 5251-frame scan in Phase 6 to
+   have no real ceiling) now also passed, because a large interior surface in that
+   scan -- plausibly furniture, not a wall-top ring -- has `interior_frac=0.729`,
+   almost identical to `real_with_ceiling`'s genuine `0.719`. `interior_frac` alone
+   cannot tell these two cases apart; criterion 2 was NOT met by the first version
+   of the fix.
+3. Diagnosed the actual discriminator: implied room height (candidate height minus
+   floor height) was **1.21 m** for the furniture-like false positive vs **2.39 m**
+   for the genuine ceiling -- physically implausible vs plausible. Added a required
+   plausible-height gate (`CEIL_MIN_PLAUSIBLE_HEIGHT_M=1.8`,
+   `CEIL_MAX_PLAUSIBLE_HEIGHT_M=6.0`): a candidate is now accepted only if its
+   implied height is plausible AND (fill_ratio OR interior_frac) passes.
+4. Re-verified all cases (`bench/fixloop_ceiling_check.py`, reproducible):
+
+   | Case | ceiling_detected | implied height | fill_ratio | interior_frac |
+   |---|---|---|---|---|
+   | synthetic wall-top ring | **rejected** (correct) | -- | -- | -- |
+   | `real_floor_only` (no real ceiling) | **rejected** (correct) | -- | -- | -- |
+   | `real_with_ceiling` (genuine ceiling) | **accepted** (correct) | 2.39 m | 0.305 | 0.732 |
+
+5. Full test suite green after updating the one test whose assertion encoded the
+   now-fixed old behavior (`test_real_with_ceiling_patchy_coverage_still_abstains`
+   renamed to `test_real_with_ceiling_detected_after_fix_loop`, asserting the
+   ceiling IS now found with a normal, non-abstain-width CI).
+
+**Honest caveat carried forward**: this is now calibrated against 3 real
+fixtures (2 negative, 1 positive) for ceiling detection specifically. The
+height-plausibility bounds are deliberately generous (1.8-6.0 m) rather than
+tuned tight to these 3 points, to avoid overfitting -- but a classifier
+validated on 3 points is still a classifier validated on 3 points. Revisit
+with more real captures, same as every other empirically-calibrated threshold
+in this project (see project memory `feedback_ceiling_fill_ratio.md`).

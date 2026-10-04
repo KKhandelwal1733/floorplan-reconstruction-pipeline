@@ -166,19 +166,27 @@ def test_real_floor_only_ceiling_unobserved():
 
 
 @pytest.mark.skipif(not REAL_WITH_CEILING.exists(), reason="real_with_ceiling fixture not present")
-def test_real_with_ceiling_patchy_coverage_still_abstains():
-    """Despite the fixture's name, the highest horizontal plane candidate here
-    (room-height estimate ~2.4 m, physically plausible) only reaches a 2-D
-    fill ratio of ~0.23 - below CEIL_MIN_FILL_RATIO (0.35) and close to the
-    ~0.28-0.29 fill ratio measured on a synthetic wall-top false positive.
-    The two aren't reliably separable on this metric, so the conservative
-    choice (abstain/widen per hard rule #2) is correct even though it means
-    this particular real ceiling attempt doesn't get a tight measurement.
-    Known limitation: casual handheld ceiling sweeps are patchier than the
-    heuristic's synthetic calibration case assumed - worth revisiting with
-    more real captures in a later phase."""
+def test_real_with_ceiling_detected_after_fix_loop():
+    """Phase 11 fix loop (see DECLARATION.md): the highest horizontal plane
+    candidate here (room-height estimate ~2.4 m, physically plausible) only
+    reached a 2-D fill ratio of ~0.23 - too close to the ~0.28-0.29 fill
+    ratio measured on a synthetic wall-top false positive to trust alone.
+    interior_frac (what fraction of inliers fall in the shrunk-margin
+    interior of the candidate's own bbox) separates the two cases by a wide
+    margin instead (0.0 for any wall-top ring vs 0.6-0.73 here) -- but
+    testing against real_floor_only (which has no real ceiling) surfaced a
+    third failure mode: a large interior surface that isn't a wall-top ring
+    (plausibly furniture) can have interior_frac nearly identical to a
+    genuine ceiling's. Implied room height (1.21 m there vs 2.39 m here)
+    is what actually tells them apart, so acceptance now requires a
+    plausible height AND (fill_ratio OR interior_frac)."""
     from roomscan.io.stray_scanner import load_scan
     pts = load_scan(REAL_WITH_CEILING, frame_stride=5)
     layout = extract_layout(pts)
-    assert layout.ceiling_unobserved
+    assert not layout.ceiling_unobserved
     assert layout.floor_area_m2.value > 10
+    assert 1.8 <= layout.ceiling_height_m.value <= 6.0
+    # a real (non-abstained) measurement should be far narrower than the
+    # abstain-path's wide CI
+    hw = (layout.ceiling_height_m.hi - layout.ceiling_height_m.lo) / 2
+    assert hw < CEIL_UNOBSERVED_HALF_WIDTH_M

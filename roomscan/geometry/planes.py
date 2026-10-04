@@ -7,7 +7,15 @@ from __future__ import annotations
 
 import numpy as np
 
-from roomscan.config import CEIL_MIN_FILL_RATIO, GRAVITY_SAMPLE, SEED
+from roomscan.config import (
+    CEIL_INTERIOR_MARGIN,
+    CEIL_MAX_PLAUSIBLE_HEIGHT_M,
+    CEIL_MIN_FILL_RATIO,
+    CEIL_MIN_INTERIOR_FRAC,
+    CEIL_MIN_PLAUSIBLE_HEIGHT_M,
+    GRAVITY_SAMPLE,
+    SEED,
+)
 
 _CANONICAL = [np.array([1., 0., 0.]), np.array([0., 1., 0.]), np.array([0., 0., 1.])]
 
@@ -169,11 +177,25 @@ def find_floor_ceiling(
 
     ceiling = None
     if len(full_planes) > 1:
-        # Reject ceiling candidates whose 2D inlier coverage looks like wall-tops
-        # (perimeter-only ring) rather than an actual ceiling (interior filled).
+        # Reject ceiling candidates that aren't a plausible real ceiling. Three
+        # signals (see config.py comment / DECLARATION.md -- the first revision
+        # of this check used only the first two, but testing against real data
+        # surfaced a third failure mode: a large interior surface that isn't a
+        # wall-top ring, e.g. furniture, can have near-identical interior_frac to
+        # a genuine ceiling. Implied room height is what actually tells them apart):
+        #   1. plausible height (REQUIRED): implausibly short candidates (e.g. a
+        #      tabletop) are rejected regardless of 2-D shape.
+        #   2. fill_ratio OR interior_frac (either sufficient): distinguishes a
+        #      genuine (even patchy) ceiling from a wall-top ring, which fill_ratio
+        #      alone couldn't reliably do (0.23 real ceiling vs 0.28-0.29 wall-top,
+        #      too close) but interior_frac separates by a wide margin (0.0 vs 0.6+).
         ceil_candidate = full_planes[-1]
-        fill = _ceiling_fill_ratio(pts[ceil_candidate[2]], gravity)
-        if fill >= CEIL_MIN_FILL_RATIO:
+        ceil_pts = pts[ceil_candidate[2]]
+        implied_height = abs(ceil_candidate[3] - full_planes[0][3])
+        plausible_height = CEIL_MIN_PLAUSIBLE_HEIGHT_M <= implied_height <= CEIL_MAX_PLAUSIBLE_HEIGHT_M
+        fill = _ceiling_fill_ratio(ceil_pts, gravity)
+        interior = _ceiling_interior_frac(ceil_pts, gravity)
+        if plausible_height and (fill >= CEIL_MIN_FILL_RATIO or interior >= CEIL_MIN_INTERIOR_FRAC):
             ceiling = (ceil_candidate[0], ceil_candidate[1], ceil_candidate[2])
 
     return floor, ceiling
@@ -204,3 +226,31 @@ def _ceiling_fill_ratio(
     grid = np.zeros((nv, nu), dtype=bool)
     grid[vi, ui] = True
     return float(grid.sum()) / (nv * nu)
+
+
+def _ceiling_interior_frac(
+    inlier_pts: np.ndarray,
+    gravity: np.ndarray,
+    margin: float = CEIL_INTERIOR_MARGIN,
+) -> float:
+    """Fraction of ceiling inlier points falling in the margin-shrunk interior
+    of the candidate plane's own 2-D bounding box.
+
+    A wall-top ring can never have interior points by construction (it only
+    traces the room's perimeter); a real ceiling, even swept patchily, is
+    reached by walking around inside the room, so some meaningful fraction
+    of its points land in the interior. See DECLARATION.md (Phase 11) --
+    this is a much cleaner separator than _ceiling_fill_ratio alone.
+    """
+    ref = np.array([1., 0., 0.]) if abs(float(gravity[0])) < 0.9 else np.array([0., 1., 0.])
+    u = np.cross(gravity, ref); u /= np.linalg.norm(u)
+    v = np.cross(gravity, u)
+    pts2 = np.stack([inlier_pts @ u, inlier_pts @ v], axis=1)
+    mn, mx = pts2.min(axis=0), pts2.max(axis=0)
+    span = np.maximum(mx - mn, 1e-6)
+    norm = (pts2 - mn) / span
+    inside = (
+        (norm[:, 0] >= margin) & (norm[:, 0] <= 1 - margin)
+        & (norm[:, 1] >= margin) & (norm[:, 1] <= 1 - margin)
+    )
+    return float(inside.mean())

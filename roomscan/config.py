@@ -17,6 +17,25 @@ GRAVITY_SAMPLE = 8_000  # points used by detect_gravity
 CEIL_UNOBSERVED_MARGIN_M = 0.30   # add this above the highest observed point
 CEIL_UNOBSERVED_HALF_WIDTH_M = 0.50  # half-width of the wide CI when ceiling not seen
 CEIL_MIN_FILL_RATIO = 0.35        # min 2D fill ratio of ceiling inliers (rejects wall tops)
+# Fix loop (Phase 11, see DECLARATION.md): fill ratio alone measured 0.23 for a real
+# patchy ceiling vs 0.28-0.29 for a synthetic wall-top ring -- too close to trust.
+# interior_frac (what fraction of inliers fall in the shrunk-margin interior of the
+# candidate plane's own bbox) separates them by a wide margin instead: 0.0 for any
+# wall-top ring (by construction, it can never have interior points) vs 0.6-0.73 for
+# a real ceiling. A ceiling is accepted if EITHER signal passes, not just fill ratio.
+CEIL_MIN_INTERIOR_FRAC = 0.30
+CEIL_INTERIOR_MARGIN = 0.20        # shrink margin (each side) defining "interior"
+# Testing interior_frac against real_floor_only (which has no real ceiling) surfaced
+# a THIRD failure mode beyond the original two-case check: a large interior surface
+# that isn't a wall-top ring (e.g. furniture/a tabletop) can have interior_frac
+# nearly identical to a genuine ceiling's (0.729 vs 0.719) -- interior_frac alone
+# can't tell them apart. What does: the implied room height (candidate height minus
+# floor height) was 1.21 m for the furniture-like false positive vs 2.39 m for the
+# genuine ceiling -- physically implausible vs plausible. Required as a gate,
+# generous enough to admit short (attic/crawlspace) and tall (vaulted/commercial)
+# real ceilings without over-fitting to residential norms.
+CEIL_MIN_PLAUSIBLE_HEIGHT_M = 1.8
+CEIL_MAX_PLAUSIBLE_HEIGHT_M = 6.0
 
 # --- Wall extraction ---
 WALL_MERGE_ANGLE_DEG = 8.0  # merge convex-hull vertices turning less than this (collapses noise)
