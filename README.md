@@ -10,20 +10,23 @@ which tier runs on which hardware and its honest accuracy, `COMPLIANCE.md` for
 what the output actually means and its documented limitations,
 `COMPLIANCE_MATRIX.md` for the literal requirement-by-requirement status against
 the case study brief, `DISCLOSURES.md` for dependencies/data/AI-assistance
-provenance, and `docs/TECHNICAL_REPORT.md` for the full project writeup.
+provenance, `docs/BENCHMARK_REPORT.md` for gates/repeatability/head-to-head/timing
+results, and `docs/TECHNICAL_REPORT.md` for the full project writeup.
 
 ## Quickstart
 
 ```bash
-make install   # pip install -e ".[dev]"
-make test      # run the full test suite
-make demo      # run the pipeline on the bundled sample scan
-make bench     # gate table + real video-vs-LiDAR comparison, against whatever
-               # real fixtures are present
-make ablate    # drift ablation (does chain length affect video-tier error?)
-make calibrate # conformal calibration across tiers
-make repro     # replay plan.json from cache/ (or populate it), verify determinism
-make live      # full live path on the sample scan, cache/ bypassed entirely
+make setup           # pip install -e ".[dev]" (no model weights to fetch -- none exist, see docs/model_registry.md)
+make test            # run the full test suite
+make demo            # run the pipeline on the bundled sample scan
+make bench           # gate table (all 3 tiers) + repeatability + execution timing,
+                      # against whatever real fixtures are present
+make ablate          # drift ablation (video frame-chaining + synthetic pose-graph on/off)
+make calibrate       # conformal calibration across tiers
+make repro           # replay plan.json from cache/ (or populate it), verify determinism
+make live            # full live path on the sample scan, cache/ bypassed entirely
+make fixloop-before  # snapshot a fix-loop check before writing the fix (commit this first)
+make fixloop-after   # snapshot after the fix, diff against the before snapshot
 ```
 
 ## One command, three tiers
