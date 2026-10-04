@@ -16,6 +16,7 @@ from typing import Any
 
 import numpy as np
 
+from roomscan.calibration.factors import apply_conformal_widening, load_calibration_factor
 from roomscan.config import VIDEO_EMPIRICAL_MIN_REL_HW, VIDEO_MIN_RECONSTRUCTED_PTS
 from roomscan.geometry.room_layout import RoomLayout, extract_layout
 from roomscan.geometry.scale_ensemble import (
@@ -37,6 +38,14 @@ def _widen_rel(m: Measurement | None, rel_hw: float) -> Measurement | None:
                         confidence_level=m.confidence_level)
 
 
+def _apply_conformal(m: Measurement | None, factor: float) -> Measurement | None:
+    """Multiply a Measurement's CI half-width by a conformal calibration factor."""
+    if m is None:
+        return None
+    lo, hi = apply_conformal_widening(m.lo, m.hi, m.value, factor)
+    return Measurement(value=m.value, lo=lo, hi=hi, confidence_level=m.confidence_level)
+
+
 def reconstruct_from_frames(
     frames: list[np.ndarray],
     min_rel_hw: float = VIDEO_EMPIRICAL_MIN_REL_HW,
@@ -44,6 +53,8 @@ def reconstruct_from_frames(
     strategy: str = "chained",
     min_points: int = VIDEO_MIN_RECONSTRUCTED_PTS,
     min_plane_inliers: int = 200,
+    calibration_tier: str | None = "video",
+    tier_label: str | None = None,
 ) -> tuple[RoomLayout, dict[str, Any]]:
     """Reconstruct a RoomLayout from a list of BGR frames (any source).
 
@@ -52,10 +63,22 @@ def reconstruct_from_frames(
     handful of unordered stills, all-pairs search for the one pair with
     enough shared view -- see sfm.reconstruct_best_pair).
 
+    calibration_tier names which tier's conformal factor (bench/calibrate.py,
+    Phase 9) to apply, if one has been computed and is achievable with the
+    calibration points available -- a no-op (and the empirical min_rel_hw
+    floor keeps doing the real work) until enough real captures accumulate.
+    Pass None to skip the lookup entirely -- REQUIRED when this call itself
+    is gathering calibration data (bench/derive_tiers.py), since applying a
+    prior calibration factor while computing the next one would be circular.
+
+    tier_label prefixes this call's own warning messages (e.g. "video tier: ");
+    defaults to calibration_tier's value, or "tier" if that's None too.
+
     Returns (layout, diagnostics). Raises ValueError if reconstruction fails
     at any stage -- callers should catch this per the "never crash, abstain
     instead" rule and degrade to a stub/warning rather than let it propagate.
     """
+    label = tier_label or calibration_tier or "tier"
     if len(frames) < 2:
         raise ValueError(f"only {len(frames)} usable frame(s) given")
 
@@ -83,10 +106,21 @@ def reconstruct_from_frames(
         wall.length_m = _widen_rel(wall.length_m, scale_rel_hw)
 
     layout.capture_warnings.append(
-        f"scale recovered via {len(estimates)}-method ensemble "
+        f"{label} tier: scale recovered via {len(estimates)}-method ensemble "
         f"(factor={scale:.3f}, +/-{scale_rel_hw:.1%} relative spread); "
         "monocular reconstruction, no absolute depth"
     )
+
+    conformal_factor = load_calibration_factor(calibration_tier) if calibration_tier else None
+    if conformal_factor is not None:
+        layout.floor_area_m2 = _apply_conformal(layout.floor_area_m2, conformal_factor)
+        layout.ceiling_height_m = _apply_conformal(layout.ceiling_height_m, conformal_factor)
+        for wall in layout.walls:
+            wall.length_m = _apply_conformal(wall.length_m, conformal_factor)
+        layout.capture_warnings.append(
+            f"{label} tier: CI additionally widened {conformal_factor:.2f}x by conformal "
+            f"calibration (bench/calibrate.py, tier={calibration_tier})"
+        )
 
     diagnostics = {
         "scale_factor": scale,
@@ -95,6 +129,7 @@ def reconstruct_from_frames(
         "scale_estimates": [(e.source, e.factor) for e in estimates],
         "n_frames": len(frames),
         "n_points_unscaled": len(pts_unscaled),
+        "conformal_factor_applied": conformal_factor,
     }
     return layout, diagnostics
 
@@ -103,11 +138,14 @@ def process_video(
     video_path: Path,
     max_frames: int | None = None,
     interval_s: float | None = None,
+    calibration_tier: str | None = "video",
 ) -> tuple[RoomLayout, dict[str, Any]]:
     """Reconstruct a RoomLayout from a single handheld video.
 
     max_frames/interval_s override the config defaults when given (used by
     the drift ablation in bench/ablate.py to vary chain length).
+    calibration_tier: see reconstruct_from_frames -- pass None when this
+    call itself is gathering calibration data (bench/derive_tiers.py).
     """
     kwargs: dict[str, Any] = {}
     if max_frames is not None:
@@ -118,7 +156,8 @@ def process_video(
     if len(frames) < 3:
         raise ValueError(f"only {len(frames)} usable frame(s) sampled from {video_path}")
 
-    layout, diagnostics = reconstruct_from_frames(frames)
+    layout, diagnostics = reconstruct_from_frames(
+        frames, tier_label="video", calibration_tier=calibration_tier,
+    )
     diagnostics["n_frames_sampled"] = diagnostics.pop("n_frames")
-    layout.capture_warnings[-1] = "video tier: " + layout.capture_warnings[-1]
     return layout, diagnostics

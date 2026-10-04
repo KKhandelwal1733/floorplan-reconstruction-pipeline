@@ -39,9 +39,9 @@ def process_room_photos(room_dir: Path) -> tuple[RoomLayout, dict[str, Any]]:
     layout, diagnostics = reconstruct_from_frames(
         photos, min_rel_hw=PHOTO_EMPIRICAL_MIN_REL_HW, detector="sift",
         strategy="best_pair", min_points=PHOTO_MIN_RECONSTRUCTED_PTS,
-        min_plane_inliers=PHOTO_MIN_PLANE_INLIERS,
+        min_plane_inliers=PHOTO_MIN_PLANE_INLIERS, calibration_tier="photo",
+        tier_label="photo",
     )
-    layout.capture_warnings[-1] = "photo tier: " + layout.capture_warnings[-1]
     diagnostics["n_photos"] = diagnostics.pop("n_frames")
     diagnostics["room_dir"] = str(room_dir)
     return layout, diagnostics

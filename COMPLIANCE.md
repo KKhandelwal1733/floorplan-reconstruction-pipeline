@@ -33,6 +33,17 @@ Outputs are **estimates**, not certified surveys.
   relative room position or orientation (no real multi-room fixture exists
   to validate cross-room feature matching against). Rooms are laid out on
   a simple non-overlapping grid for visualization, not a geometric stitch.
+- Conformal calibration (`bench/calibrate.py`, `roomscan/calibration/`): a
+  standard split-conformal procedure that would, given enough real
+  video/photo-vs-LiDAR comparison points, compute a statistically justified
+  CI-widening factor per tier. With only 3 real fixtures (6 total
+  calibration points: n=4 video, n=2 photo after some abstentions), this
+  honestly reports "not achievable" at the project's 90% target coverage —
+  split-conformal needs at least 9 calibration points for any finite
+  90%-coverage factor at all, regardless of how spread out they are. The
+  existing hand-set empirical floors (`VIDEO_/PHOTO_EMPIRICAL_MIN_REL_HW`)
+  remain the actual active mechanism; rerun `make calibrate` as more real
+  captures accumulate.
 - Damage classification is advisory. Human review required before remediation decisions.
 
 ## Not a Substitute For

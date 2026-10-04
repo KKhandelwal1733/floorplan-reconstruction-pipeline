@@ -1,4 +1,4 @@
-.PHONY: install test lint demo bench ablate
+.PHONY: install test lint demo bench ablate calibrate
 
 install:
 	pip install -e ".[dev]"
@@ -17,3 +17,6 @@ bench:
 
 ablate:
 	python -m bench.ablate tests/fixtures/single_room
+
+calibrate:
+	python -m bench.calibrate

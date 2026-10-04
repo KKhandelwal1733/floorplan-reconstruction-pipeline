@@ -45,7 +45,10 @@ def compare_video_to_lidar(scan_dir: Path, lidar_frame_stride: int = 5) -> dict[
     lidar_pts = load_scan(scan_dir, frame_stride=lidar_frame_stride)
     lidar_layout = extract_layout(lidar_pts)
 
-    video_layout, diagnostics = process_video(video_path)
+    # calibration_tier=None: this comparison IS the raw data used to compute
+    # calibration factors (bench/calibrate.py) -- applying a prior factor
+    # here would be circular.
+    video_layout, diagnostics = process_video(video_path, calibration_tier=None)
 
     result: dict[str, Any] = {
         "scan_dir": str(scan_dir),
@@ -53,6 +56,8 @@ def compare_video_to_lidar(scan_dir: Path, lidar_frame_stride: int = 5) -> dict[
         "pseudo_ground_truth": "lidar_tier_geometry (not laser-measured)",
         "lidar_floor_area_m2": lidar_layout.floor_area_m2.value,
         "video_floor_area_m2": video_layout.floor_area_m2.value,
+        "video_floor_area_lo": video_layout.floor_area_m2.lo,
+        "video_floor_area_hi": video_layout.floor_area_m2.hi,
         "floor_area_rel_err": _rel_err(
             lidar_layout.floor_area_m2.value, video_layout.floor_area_m2.value
         ),
@@ -64,6 +69,8 @@ def compare_video_to_lidar(scan_dir: Path, lidar_frame_stride: int = 5) -> dict[
     if lidar_layout.ceiling_height_m and video_layout.ceiling_height_m:
         result["lidar_ceiling_height_m"] = lidar_layout.ceiling_height_m.value
         result["video_ceiling_height_m"] = video_layout.ceiling_height_m.value
+        result["video_ceiling_height_lo"] = video_layout.ceiling_height_m.lo
+        result["video_ceiling_height_hi"] = video_layout.ceiling_height_m.hi
         result["ceiling_height_rel_err"] = _rel_err(
             lidar_layout.ceiling_height_m.value, video_layout.ceiling_height_m.value
         )
@@ -116,10 +123,12 @@ def compare_photo_to_lidar(
     lidar_layout = extract_layout(lidar_pts)
 
     photos = derive_simulated_photos(video_path, n_photos=n_photos)
+    # calibration_tier=None: see the comment in compare_video_to_lidar above.
     photo_layout, diagnostics = reconstruct_from_frames(
         photos, min_rel_hw=PHOTO_EMPIRICAL_MIN_REL_HW, detector="sift",
         strategy="best_pair", min_points=PHOTO_MIN_RECONSTRUCTED_PTS,
-        min_plane_inliers=PHOTO_MIN_PLANE_INLIERS,
+        min_plane_inliers=PHOTO_MIN_PLANE_INLIERS, calibration_tier=None,
+        tier_label="photo",
     )
 
     result: dict[str, Any] = {
@@ -129,6 +138,8 @@ def compare_photo_to_lidar(
         "pseudo_ground_truth": "lidar_tier_geometry (not laser-measured)",
         "lidar_floor_area_m2": lidar_layout.floor_area_m2.value,
         "photo_floor_area_m2": photo_layout.floor_area_m2.value,
+        "photo_floor_area_lo": photo_layout.floor_area_m2.lo,
+        "photo_floor_area_hi": photo_layout.floor_area_m2.hi,
         "floor_area_rel_err": _rel_err(
             lidar_layout.floor_area_m2.value, photo_layout.floor_area_m2.value
         ),
@@ -139,6 +150,8 @@ def compare_photo_to_lidar(
     if lidar_layout.ceiling_height_m and photo_layout.ceiling_height_m:
         result["lidar_ceiling_height_m"] = lidar_layout.ceiling_height_m.value
         result["photo_ceiling_height_m"] = photo_layout.ceiling_height_m.value
+        result["photo_ceiling_height_lo"] = photo_layout.ceiling_height_m.lo
+        result["photo_ceiling_height_hi"] = photo_layout.ceiling_height_m.hi
         result["ceiling_height_rel_err"] = _rel_err(
             lidar_layout.ceiling_height_m.value, photo_layout.ceiling_height_m.value
         )
