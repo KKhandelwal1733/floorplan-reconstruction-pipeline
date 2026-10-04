@@ -47,7 +47,7 @@ the project's hard rule against fabricating numbers).
 | Opening widths ≤2cm on ≥85%, detection scored (miss+phantom) | **not measured** — no ground truth |
 | Ceiling height ≤1.5cm/room; spread ≤1cm across repeats; bias-vs-variance stated | **not measured** — no ground truth, no real repeat captures. Bias/variance framework not yet written into the technical report (tracked) |
 | Repeatability ≤1cm or 0.5%/wall | **partial** — proxy gate (above) passes against real data; literal gate **not measured** |
-| Drift accountability: report states approach + on/off ablation on stitched footprint | **partial** — a real drift-correction mechanism now exists (the pose graph itself: Manhattan snap + Huber-robust joint least-squares over all door constraints, vs. naively placing each room from only its immediately-preceding neighbour). `bench/ablate.py` still tests chain-length vs error, not this on/off comparison — redesigning it to compare pose-graph-corrected vs. raw sequential placement is tracked separately |
+| Drift accountability: report states approach + on/off ablation on stitched footprint | **done** (mechanism-level, not real-world) — `bench/ablate.py::run_pose_graph_drift_ablation` builds a synthetic 4-room square ring with a held-out loop-closure edge, injects Gaussian door-position noise on the other 3 edges at increasing std-dev, and compares naive sequential placement (`refine=False`) against the joint Huber-robust least-squares solve (`refine=True`). Naive error grows with injected noise (0.147m → 0.346m RMS over 20 trials/level); joint refinement damps it (0.147m → 0.209m), confirming the loop-closure mechanism actually reduces drift. Labelled `synthetic: true` throughout — no real multi-room capture (any tier) exists to run this against ground truth instead |
 | Photo-tier whole-property stitch, ±8% calibrated, correct adjacency, no overlaps | **partial** — real pose-graph stitch now attempted (see Part 1/2 above); accuracy against the ±8% gate still **not measured** (no real multi-room photo fixture) |
 | Video-tier footprint/wall lengths ±3% | **fails** — measured 65-91% error on the one real example tested (`COMPLIANCE.md`, `docs/TECHNICAL_REPORT.md`), disclosed honestly, not hidden |
 
@@ -100,10 +100,11 @@ compliance coverage / 10% head-to-head / 5% capture route / 5% process evidence)
 - **Hard-blocked by lack of device access** (no further engineering can close these):
   benchmark accuracy (15%), head-to-head (10%), and the ground-truth-dependent rows
   within gates/deliverables.
-- **In active remediation** (tracked, buildable without device access): correct drift
-  on/off ablation (vs. the now-real pose graph), mirror/glass/low-light quality-gate
-  detection, reproduction bundle, error budget + bias/variance report sections, CLI
-  contract match, `report.md` wiring.
+- **In active remediation** (tracked, buildable without device access):
+  mirror/glass/low-light quality-gate detection, reproduction bundle, error budget +
+  bias/variance report sections, CLI contract match, `report.md` wiring.
 - **Done**: fix loop, process evidence, device matrix, this matrix, model/data
   disclosures, multi-room door-to-door pose-graph stitching (all three tiers;
-  unvalidated against ground truth, no fixture exists).
+  unvalidated against ground truth, no fixture exists), drift on/off ablation
+  (synthetic ring, confirms the correction mechanism works; real-world accuracy
+  still not measured).

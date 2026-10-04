@@ -120,6 +120,7 @@ def solve_pose_graph(
     layouts: list,
     correspondences: list[DoorCorrespondence],
     wall_thickness_m: float = POSE_GRAPH_WALL_THICKNESS_M,
+    refine: bool = True,
 ) -> list[RoomPose]:
     """Jointly solve (x, y, yaw) per room from door-to-door correspondences.
 
@@ -127,6 +128,16 @@ def solve_pose_graph(
     layouts' order. Disconnected rooms (no path of correspondences back to
     room 0) are returned at the origin with yaw=0 -- callers should treat
     these as unplaced and fall back to grid placement for them.
+
+    refine=False skips the final joint robust-least-squares step and
+    returns the naive BFS placement instead: each room placed only from its
+    one parent edge in the BFS spanning tree, ignoring every other edge
+    (e.g. a loop-closure correspondence back to an earlier room). This is
+    "drift correction off" -- used by bench/ablate.py's pose-graph drift
+    ablation to measure what the joint solve (refine=True, "on") actually
+    buys you when a capture loops back on itself. On a pure chain/tree of
+    correspondences (no loop) the two are identical, since every edge is
+    already in the spanning tree and already satisfied exactly.
     """
     from scipy.optimize import least_squares
 
@@ -197,6 +208,9 @@ def solve_pose_graph(
             ys[other] = target[1] - door_other_rot[1]
             placed.add(other)
             queue.append(other)
+
+    if not refine:
+        return [RoomPose(xs[i], ys[i], yaws[i]) for i in range(n)]
 
     # Continuous refinement: translations only (yaw stays Manhattan-snapped),
     # joint robust least squares over every correspondence simultaneously.

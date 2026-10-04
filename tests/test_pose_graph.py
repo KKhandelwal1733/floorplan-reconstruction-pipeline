@@ -8,6 +8,7 @@ differing door offsets and differing wall lengths, a wall-midpoint aligner
 and a door aligner disagree, so this is the regression test for that bug.
 """
 import numpy as np
+import pytest
 
 from roomscan.geometry.openings import DetectedOpening
 from roomscan.geometry.room_layout import RoomLayout, WallSegment
@@ -90,9 +91,29 @@ def test_disconnected_room_stays_at_origin():
     assert all(p.x == 0.0 and p.y == 0.0 for p in poses)
 
 
+def test_refine_false_matches_refine_true_on_a_tree_with_no_redundant_edge():
+    """A single correspondence is a 1-edge spanning tree with nothing left
+    over to jointly refine -- "drift correction off" (refine=False) and
+    "on" (refine=True) must agree exactly, since there's no extra
+    constraint to use either way. (bench/ablate.py's drift ablation relies
+    on this base case: refine only matters once a redundant/loop-closure
+    edge exists.)"""
+    room_a, room_b = _rect_layout(4, 5), _rect_layout(3, 5)
+    openings_a = [_door(1, 2.0, 0.9)]
+    openings_b = [_door(3, 2.0, 0.9)]
+    corr = find_door_correspondences([room_a, room_b], [openings_a, openings_b], 0, 1)
+    poses_off = solve_pose_graph([room_a, room_b], [corr], refine=False)
+    poses_on = solve_pose_graph([room_a, room_b], [corr], refine=True)
+    for p_off, p_on in zip(poses_off, poses_on):
+        assert p_off.x == pytest.approx(p_on.x, abs=1e-9)
+        assert p_off.y == pytest.approx(p_on.y, abs=1e-9)
+        assert p_off.yaw == pytest.approx(p_on.yaw, abs=1e-9)
+
+
 if __name__ == "__main__":
     test_symmetric_two_room_doors_coincide()
     test_asymmetric_doors_and_wall_lengths_still_coincide()
     test_no_matching_door_returns_none()
     test_disconnected_room_stays_at_origin()
+    test_refine_false_matches_refine_true_on_a_tree_with_no_redundant_edge()
     print("ok")

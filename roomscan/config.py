@@ -114,6 +114,18 @@ POSE_GRAPH_WALL_THICKNESS_M = 0.15   # gap prior between two rooms' shared wall 
 POSE_GRAPH_HUBER_DELTA = 0.05        # scipy least_squares robust-loss scale (metres)
 POSE_GRAPH_MIN_OVERLAP_FRAC = 0.05   # reject a placement if AABB overlap exceeds this
                                       # fraction of the smaller room's own area
+# Drift-correction on/off ablation (bench/ablate.py::run_pose_graph_drift_ablation):
+# a synthetic 4-room square ring (no real multi-room capture exists -- see
+# COMPLIANCE.md), 3 of its 4 door correspondences ("chain" edges) perturbed by
+# Gaussian noise of each std-dev below to simulate compounding per-room
+# door-position measurement error, the 4th ("loop closure") edge left exact so
+# its residual after naive (refine=False) placement reveals the accumulated
+# drift that only the joint solve (refine=True) has a chance to correct.
+POSE_GRAPH_ABLATION_NOISE_STDS_M = [0.0, 0.02, 0.05, 0.10, 0.20]
+# A single noise draw can cancel out by chance direction (the gap is a 2-D
+# vector norm, not a signed scalar) -- average RMS gap over this many
+# independent trials per noise level instead of trusting one draw.
+POSE_GRAPH_ABLATION_N_TRIALS = 30
 VIDEO_PLANE_THRESH_FRAC = 0.02        # plane-RANSAC threshold as a fraction of the cloud's bbox diagonal
                                        # (the unscaled cloud has no metric units yet, so a fixed-metre
                                        # threshold like RANSAC_THRESH_M is meaningless here)
