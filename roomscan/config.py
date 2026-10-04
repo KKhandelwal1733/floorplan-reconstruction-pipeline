@@ -32,3 +32,12 @@ OPENING_DOOR_GAP_M = 0.15      # opening bottom must be within this of floor to 
 OPENING_MIN_H_M = 0.50         # minimum opening height to report
 OPENING_OCCUPANCY_THRESH = 0.25  # fraction of cells occupied to count a column as "filled"
 OPENING_MIN_WALL_PTS = 30       # skip wall if fewer nearby points (insufficient coverage)
+
+# --- Quality gate (Phase 6) ---
+QUALITY_MIN_FLOOR_INLIERS = 20_000  # below this, floor coverage is suspect (partial scan)
+QUALITY_MIN_PTS_PER_M2 = 500         # point density floor for a confident area estimate
+QUALITY_CI_WIDEN_FACTOR = 2.0        # multiply CI half-widths when either check fails
+
+# --- Repeatability / split-scan (Phase 6) ---
+REPEAT_AREA_TOL_FRAC = 0.05       # split-scan floor-area relative tolerance
+REPEAT_PERIMETER_TOL_FRAC = 0.05  # split-scan wall-perimeter relative tolerance

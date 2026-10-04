@@ -68,12 +68,23 @@ def _load_depth(path: Path) -> np.ndarray:
         )
 
 
-def load_scan(scan_dir: Path, max_frames: int | None = None) -> np.ndarray:
+def load_scan(
+    scan_dir: Path,
+    max_frames: int | None = None,
+    frame_stride: int = 1,
+    frame_offset: int = 0,
+) -> np.ndarray:
     """Load a Stray Scanner capture → (N, 3) fused world-frame point cloud.
 
     Args:
-        scan_dir:   Path to a Stray Scanner export directory.
-        max_frames: Cap the number of depth frames loaded (useful for large scans).
+        scan_dir:     Path to a Stray Scanner export directory.
+        max_frames:   Cap the number of depth frames loaded (useful for large scans).
+        frame_stride: Take every Nth frame (e.g. 2 = every other frame). Frames are
+                      chronological, so a stride spans the whole capture — unlike
+                      max_frames, which only sees a chronological prefix. Used for
+                      fast representative previews and split-scan repeatability
+                      checks (two interleaved halves of the same capture).
+        frame_offset: Starting index before striding (0-based).
     """
     scan_dir = Path(scan_dir)
     K_rgb = np.loadtxt(scan_dir / "camera_matrix.csv", delimiter=",")
@@ -102,6 +113,10 @@ def load_scan(scan_dir: Path, max_frames: int | None = None) -> np.ndarray:
     for p in sorted(depth_dir.glob("*.npy")):
         seen[p.stem] = p
     depth_files = [seen[k] for k in sorted(seen)]
+
+    if frame_stride != 1 or frame_offset != 0:
+        depth_files = depth_files[frame_offset::frame_stride]
+        poses = poses[frame_offset::frame_stride]
 
     if max_frames is not None:
         depth_files = depth_files[:max_frames]

@@ -9,3 +9,5 @@ out/
 *.ply
 # Real scan data (large binary; download separately)
 tests/fixtures/single_room/
+tests/fixtures/real_floor_only/
+tests/fixtures/real_with_ceiling/

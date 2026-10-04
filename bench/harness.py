@@ -44,30 +44,75 @@ def _schema_gate(layout_or_plan_path: Any) -> GateResult:
         return GateResult("schema_valid", FAIL, note=str(e))
 
 
-def _determinism_gate(scan_dir: Path | None = None) -> GateResult:
-    """Two back-to-back runs must produce identical JSON output."""
+def _determinism_gate(scan_dir: Path | None = None, frame_stride: int = 20) -> GateResult:
+    """Two back-to-back runs on the same frames must produce identical output.
+
+    frame_stride keeps this fast on a large real scan (a representative
+    subsample, not a prefix) rather than reloading every frame twice.
+    """
     if scan_dir is None:
         return GateResult("determinism", NOT_MEASURED,
                           note="pass scan_dir to run determinism check")
     try:
         from roomscan.io.stray_scanner import load_scan
         from roomscan.geometry.room_layout import extract_layout
-        pts1 = load_scan(scan_dir)
-        pts2 = load_scan(scan_dir)
+        pts1 = load_scan(scan_dir, frame_stride=frame_stride)
+        pts2 = load_scan(scan_dir, frame_stride=frame_stride)
         import numpy as np
-        if np.allclose(pts1, pts2):
+        if np.array_equal(pts1, pts2):
             l1 = extract_layout(pts1)
             l2 = extract_layout(pts2)
             same = (
-                abs(l1.floor_area_m2.value - l2.floor_area_m2.value) < 1e-6
+                l1.floor_area_m2.value == l2.floor_area_m2.value
+                and l1.floor_area_m2.lo == l2.floor_area_m2.lo
+                and l1.floor_area_m2.hi == l2.floor_area_m2.hi
             )
             return GateResult(
                 "determinism", PASS if same else FAIL,
-                note="two runs agree on floor_area" if same else "floor_area differs between runs",
+                note="two runs agree exactly on floor_area" if same
+                     else "floor_area differs between identical-input runs",
             )
         return GateResult("determinism", FAIL, note="point clouds differ between runs")
     except Exception as e:
         return GateResult("determinism", FAIL, note=str(e))
+
+
+def _repeatability_gate(scan_dir: Path | None = None, frame_stride: int = 20) -> GateResult:
+    """Two interleaved halves of the same capture should agree on geometry.
+
+    No ground truth needed: this is a self-consistency check (same physical
+    room, two independent frame subsets covering the whole capture timeline).
+    """
+    if scan_dir is None:
+        return GateResult("repeatability_split_scan", NOT_MEASURED,
+                          note="pass scan_dir to run split-scan repeatability check")
+    try:
+        from roomscan.config import REPEAT_AREA_TOL_FRAC, REPEAT_PERIMETER_TOL_FRAC
+        from roomscan.io.stray_scanner import load_scan
+        from roomscan.geometry.room_layout import extract_layout
+
+        stride2 = frame_stride * 2
+        pts_a = load_scan(scan_dir, frame_stride=stride2, frame_offset=0)
+        pts_b = load_scan(scan_dir, frame_stride=stride2, frame_offset=frame_stride)
+        layout_a = extract_layout(pts_a)
+        layout_b = extract_layout(pts_b)
+
+        area_a, area_b = layout_a.floor_area_m2.value, layout_b.floor_area_m2.value
+        area_diff = abs(area_a - area_b) / max(area_a, area_b, 1e-6)
+
+        peri_a = sum(w.length_m.value for w in layout_a.walls)
+        peri_b = sum(w.length_m.value for w in layout_b.walls)
+        peri_diff = abs(peri_a - peri_b) / max(peri_a, peri_b, 1e-6)
+
+        ok = area_diff <= REPEAT_AREA_TOL_FRAC and peri_diff <= REPEAT_PERIMETER_TOL_FRAC
+        return GateResult(
+            "repeatability_split_scan", PASS if ok else FAIL,
+            value=f"area_diff={area_diff:.1%} perimeter_diff={peri_diff:.1%}",
+            threshold=f"area<={REPEAT_AREA_TOL_FRAC:.0%} perimeter<={REPEAT_PERIMETER_TOL_FRAC:.0%}",
+            note="two interleaved frame subsets of the same capture compared",
+        )
+    except Exception as e:
+        return GateResult("repeatability_split_scan", FAIL, note=str(e))
 
 
 def _ceiling_abstain_gate(layout: Any) -> GateResult:
@@ -139,6 +184,7 @@ def run_gates(
     return [
         _schema_gate(plan_path),
         _determinism_gate(scan_dir),
+        _repeatability_gate(scan_dir),
         _ceiling_abstain_gate(layout),
         _opening_width_gate(),
         _floor_area_gate(),

@@ -133,3 +133,52 @@ def test_fixture_with_ceiling_observed():
     pts = load_scan(WITH_CEILING, max_frames=50)
     layout = extract_layout(pts)
     assert not layout.ceiling_unobserved
+
+
+# ---------------------------------------------------------------------------
+# Real Stray Scanner captures (large, gitignored; see .gitignore).
+#
+# frame_stride (not max_frames) is used deliberately: Stray Scanner frames are
+# chronological, so a prefix subset can see only part of the room (e.g. the
+# floor-walking portion before the user ever tilts up). A stride spans the
+# whole capture timeline and was verified to match the full-scan (stride=1)
+# result for real_floor_only: both show no ceiling plane, floor_area ~83-93
+# sq m. Full stride=1 loads on real_with_ceiling were not practical in this
+# environment (I/O-bound on ~19k individual PNG reads, not CPU/memory).
+# ---------------------------------------------------------------------------
+
+REAL_FLOOR_ONLY = FIXTURES / "real_floor_only"
+REAL_WITH_CEILING = FIXTURES / "real_with_ceiling"
+
+
+@pytest.mark.skipif(not REAL_FLOOR_ONLY.exists(), reason="real_floor_only fixture not present")
+def test_real_floor_only_ceiling_unobserved():
+    """Confirmed against the full 5251-frame scan (not just this stride=5
+    subsample): no horizontal plane above the floor ever reaches the ceiling
+    fill-ratio bar. floor_area ~83.7 sq m on the full scan."""
+    from roomscan.io.stray_scanner import load_scan
+    pts = load_scan(REAL_FLOOR_ONLY, frame_stride=5)
+    layout = extract_layout(pts)
+    assert layout.ceiling_unobserved
+    assert layout.floor_area_m2.value > 10  # sanity: a real room, not a fragment
+    hw = (layout.ceiling_height_m.hi - layout.ceiling_height_m.lo) / 2
+    assert hw >= CEIL_UNOBSERVED_HALF_WIDTH_M
+
+
+@pytest.mark.skipif(not REAL_WITH_CEILING.exists(), reason="real_with_ceiling fixture not present")
+def test_real_with_ceiling_patchy_coverage_still_abstains():
+    """Despite the fixture's name, the highest horizontal plane candidate here
+    (room-height estimate ~2.4 m, physically plausible) only reaches a 2-D
+    fill ratio of ~0.23 - below CEIL_MIN_FILL_RATIO (0.35) and close to the
+    ~0.28-0.29 fill ratio measured on a synthetic wall-top false positive.
+    The two aren't reliably separable on this metric, so the conservative
+    choice (abstain/widen per hard rule #2) is correct even though it means
+    this particular real ceiling attempt doesn't get a tight measurement.
+    Known limitation: casual handheld ceiling sweeps are patchier than the
+    heuristic's synthetic calibration case assumed - worth revisiting with
+    more real captures in a later phase."""
+    from roomscan.io.stray_scanner import load_scan
+    pts = load_scan(REAL_WITH_CEILING, frame_stride=5)
+    layout = extract_layout(pts)
+    assert layout.ceiling_unobserved
+    assert layout.floor_area_m2.value > 10

@@ -13,6 +13,9 @@ import numpy as np
 from roomscan.config import (
     CEIL_UNOBSERVED_HALF_WIDTH_M,
     CEIL_UNOBSERVED_MARGIN_M,
+    QUALITY_CI_WIDEN_FACTOR,
+    QUALITY_MIN_FLOOR_INLIERS,
+    QUALITY_MIN_PTS_PER_M2,
     WALL_MERGE_ANGLE_DEG,
 )
 from roomscan.geometry.planes import detect_gravity, find_floor_ceiling
@@ -44,6 +47,7 @@ class RoomLayout:
     floor_level: float = 0.0             # median floor height in up_axis direction
     ceiling_unobserved: bool = False     # True when ceiling plane not detected
     capture_warnings: list[str] = field(default_factory=list)
+    quality_score: float = 1.0           # 1.0 = full confidence; <1.0 -> CIs were widened
 
 
 # ---------------------------------------------------------------------------
@@ -128,6 +132,13 @@ def _polygon_area(verts: list[tuple[float, float]]) -> float:
         x1, y1 = verts[(i + 1) % n]
         area += x0 * y1 - x1 * y0
     return abs(area) / 2.0
+
+
+def _widen(m: Measurement, factor: float) -> Measurement:
+    """Scale a Measurement's CI half-width by `factor`, keeping value fixed."""
+    half = (m.hi - m.lo) / 2 * factor
+    return Measurement(value=m.value, lo=m.value - half, hi=m.value + half,
+                        confidence_level=m.confidence_level)
 
 
 def _wall_segments(hull: list[tuple[float, float]]) -> list[WallSegment]:
@@ -239,6 +250,30 @@ def extract_layout(
 
     walls = _wall_segments(hull)
 
+    # Quality gate: flag and widen CIs when coverage looks partial/sparse rather
+    # than silently reporting a confident number for an incomplete scan.
+    floor_inlier_count = int(floor_mask.sum())
+    pts_per_m2 = floor_inlier_count / max(area, 1e-6)
+    quality_score = 1.0
+    if floor_inlier_count < QUALITY_MIN_FLOOR_INLIERS:
+        quality_score = min(quality_score, floor_inlier_count / QUALITY_MIN_FLOOR_INLIERS)
+        warnings.append(
+            f"low floor point count ({floor_inlier_count} < {QUALITY_MIN_FLOOR_INLIERS}) "
+            "- CIs widened, possible partial scan coverage"
+        )
+    if pts_per_m2 < QUALITY_MIN_PTS_PER_M2:
+        quality_score = min(quality_score, pts_per_m2 / QUALITY_MIN_PTS_PER_M2)
+        warnings.append(
+            f"low point density ({pts_per_m2:.0f} pts/sq m < {QUALITY_MIN_PTS_PER_M2}) "
+            "- CIs widened, possible partial scan coverage"
+        )
+    quality_score = max(0.0, min(1.0, quality_score))
+
+    if quality_score < 1.0:
+        area_m = _widen(area_m, QUALITY_CI_WIDEN_FACTOR)
+        if ceil_height_m is not None:
+            ceil_height_m = _widen(ceil_height_m, QUALITY_CI_WIDEN_FACTOR)
+
     return RoomLayout(
         up_axis=up,
         floor_d=floor_d_val,
@@ -252,4 +287,5 @@ def extract_layout(
         floor_level=floor_level,
         ceiling_unobserved=ceiling_unobserved,
         capture_warnings=warnings,
+        quality_score=quality_score,
     )
