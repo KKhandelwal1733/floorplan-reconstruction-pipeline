@@ -6,6 +6,8 @@ requires-python = ">=3.10"
 dependencies = [
     "pydantic>=2",
     "jsonschema>=4",
+    "Pillow>=10",
+    "numpy>=1.24",
 ]
 
 [project.optional-dependencies]

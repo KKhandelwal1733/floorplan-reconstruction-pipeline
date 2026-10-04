@@ -7,3 +7,5 @@ dist/
 build/
 out/
 *.ply
+# Real scan data (large binary; download separately)
+tests/fixtures/single_room/
