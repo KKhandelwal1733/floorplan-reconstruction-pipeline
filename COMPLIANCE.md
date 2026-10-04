@@ -69,7 +69,14 @@ Scan data and derived plans may contain personally identifiable location informa
 Handle in accordance with applicable privacy regulations (GDPR, CCPA, etc.).
 
 ## Model Provenance
-All ML models used are documented in `docs/model_registry.md` (added in phase 12).
+See `docs/model_registry.md`: no trained ML models are used anywhere in this
+pipeline. Every stage is classical geometry, computer vision, or statistics.
+
+## Process Evidence
+This project's fix loop (ceiling-detection false negatives on real patchy
+ceiling data) is documented end to end in `DECLARATION.md`, including a
+mid-course correction the real-data testing surfaced and a reproducible
+before/after check (`bench/fixloop_ceiling_check.py`).
 
 ## Version
 Schema v0.1 — outputs are subject to breaking changes before v1.0.
