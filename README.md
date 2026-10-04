@@ -34,6 +34,13 @@ Tier is auto-detected from the input shape if `--tier` is omitted: a
 `.mp4`/`.mov` file → video, a directory containing `depth/` → lidar, any
 other directory → photo (property folder of per-room subfolders).
 
+Every tier also accepts a **property folder** of per-room subfolders (lidar:
+each a Stray Scanner export; video: each containing one video file) when
+`--tier` is passed explicitly — auto-detect only recognizes the single-room
+shapes above. Rooms are stitched via a door-to-door pose graph
+(`roomscan/geometry/pose_graph.py`) when their detected doors agree in
+width, falling back to a schematic grid otherwise — see COMPLIANCE.md.
+
 Every run writes `plan.json` (schema v0.1, see `schema/plan.schema.json`) and
 `plan.svg` to the output directory — never crashes, and always produces valid
 output, even when reconstruction has to abstain (see COMPLIANCE.md).

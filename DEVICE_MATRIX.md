@@ -34,6 +34,11 @@ taken from the benchmark actually regenerated this session (`bench/derive_tiers.
 
 ## Multi-room support
 
-All three tiers currently support **single-room reconstruction only**. Multi-room
-stitching (required by the case study for every tier, including photo) is in active
-development — see `COMPLIANCE_MATRIX.md` for status.
+All three tiers accept a property folder of per-room subfolders (lidar: each a Stray
+Scanner export; video: each containing one video file; photo: each containing 2-8
+stills) and stitch them via a door-to-door pose graph (`roomscan/geometry/pose_graph.py`):
+adjacent rooms whose detected doors agree in width are placed so the doors coincide,
+with Manhattan-snapped rotation; rooms with no door match fall back to a schematic
+non-overlapping grid. No real multi-room fixture (any tier) exists to validate this
+against ground truth — see `COMPLIANCE_MATRIX.md` for exact status and `COMPLIANCE.md`
+for the honest limitations.

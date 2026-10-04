@@ -43,7 +43,28 @@ def _run_damage_scan(frames, layout):
     return damages, scope_items
 
 
+def _is_scan_dir(d: Path) -> bool:
+    return (d / "depth").exists()
+
+
+def _find_video_file(room_dir: Path) -> Path | None:
+    for p in sorted(room_dir.iterdir()):
+        if p.is_file() and p.suffix.lower() in VIDEO_EXTENSIONS:
+            return p
+    return None
+
+
 def _run_lidar(input_path: Path, out: Path) -> None:
+    """A single Stray Scanner export folder (has depth/ directly), or a
+    property folder of several such exports (one per room) -- the latter is
+    stitched via the door-to-door pose graph, same as the photo tier."""
+    if _is_scan_dir(input_path):
+        _run_lidar_single(input_path, out)
+    else:
+        _run_lidar_property(input_path, out)
+
+
+def _run_lidar_single(input_path: Path, out: Path) -> None:
     print(f"[roomscan] loading scan: {input_path}")
     from roomscan.io.stray_scanner import load_scan
     pts = load_scan(input_path, max_frames=None)
@@ -83,7 +104,70 @@ def _run_lidar(input_path: Path, out: Path) -> None:
         print(f"[roomscan] layout failed: {exc}")
 
 
+def _run_lidar_property(input_path: Path, out: Path) -> None:
+    print(f"[roomscan] loading property folder (lidar): {input_path}")
+    try:
+        from roomscan.geometry.multi_room import stitch_rooms
+        from roomscan.geometry.openings import detect_openings
+        from roomscan.geometry.room_layout import extract_layout
+        from roomscan.io.photo_loader import list_room_dirs
+        from roomscan.io.stray_scanner import load_scan
+        from roomscan.io.video_loader import sample_frames
+        from roomscan.plan_builder import write_property_plan
+        from roomscan.render.svg_plan import render_property
+
+        room_dirs = [d for d in list_room_dirs(input_path) if _is_scan_dir(d)]
+        results: list[tuple[str, object, list]] = []
+        openings_per_room: list[list] = []
+        per_room_damage = {}
+        failures: dict[str, str] = {}
+
+        for room_dir in room_dirs:
+            try:
+                pts = load_scan(room_dir, max_frames=None)
+                layout = extract_layout(pts)
+                openings = detect_openings(pts, layout)
+                results.append((room_dir.name, layout, []))
+                openings_per_room.append(openings)
+
+                video_path = room_dir / "rgb.mp4"
+                damages, scope_items = [], []
+                if video_path.exists():
+                    frames = sample_frames(video_path, interval_s=DAMAGE_SCAN_INTERVAL_S,
+                                            max_frames=DAMAGE_SCAN_N_FRAMES)
+                    damages, scope_items = _run_damage_scan(frames, layout)
+                per_room_damage[room_dir.name] = (damages, scope_items)
+            except Exception as e:
+                failures[room_dir.name] = str(e)
+
+        property_layout = stitch_rooms(results, openings_per_room)
+        for name, reason in failures.items():
+            property_layout.warnings.append(f"room '{name}' skipped: {reason}")
+        render_property(property_layout, out / "plan.svg")
+        for w in property_layout.warnings:
+            print(f"[roomscan] warning: {w}")
+        print(f"[roomscan] {len(results)}/{len(room_dirs)} room(s) reconstructed")
+
+        write_property_plan(property_layout, out / "plan.json", per_room_damage, tier="lidar")
+    except Exception as exc:
+        from roomscan.plan_builder import write_abstained_plan
+        from roomscan.render.svg_plan import render_stub
+        render_stub(out / "plan.svg", f"Lidar property error: {exc}")
+        write_abstained_plan("lidar", f"Lidar property error: {exc}", out / "plan.json")
+        print(f"[roomscan] lidar property tier failed: {exc}")
+
+
 def _run_video(input_path: Path, out: Path) -> None:
+    """A single handheld video file, or a property folder of per-room
+    subfolders (one video per room) -- stitched via the door-to-door pose
+    graph, same as the lidar/photo tiers."""
+    if input_path.is_dir():
+        _run_video_property(input_path, out)
+    else:
+        _run_video_single(input_path, out)
+
+
+def _run_video_single(input_path: Path, out: Path) -> None:
     print(f"[roomscan] loading video: {input_path}")
     try:
         from roomscan.geometry.video_tier import process_video
@@ -108,6 +192,57 @@ def _run_video(input_path: Path, out: Path) -> None:
         render_stub(out / "plan.svg", f"Video reconstruction error: {exc}")
         write_abstained_plan("video", f"Video reconstruction error: {exc}", out / "plan.json")
         print(f"[roomscan] video tier failed: {exc}")
+
+
+def _run_video_property(input_path: Path, out: Path) -> None:
+    print(f"[roomscan] loading property folder (video): {input_path}")
+    try:
+        from roomscan.geometry.multi_room import stitch_rooms
+        from roomscan.geometry.openings import detect_openings
+        from roomscan.geometry.video_tier import process_video
+        from roomscan.io.photo_loader import list_room_dirs
+        from roomscan.io.video_loader import sample_frames
+        from roomscan.plan_builder import write_property_plan
+        from roomscan.render.svg_plan import render_property
+
+        room_dirs = list_room_dirs(input_path)
+        results: list[tuple[str, object, list]] = []
+        openings_per_room: list[list] = []
+        per_room_damage = {}
+        failures: dict[str, str] = {}
+
+        for room_dir in room_dirs:
+            video_path = _find_video_file(room_dir)
+            if video_path is None:
+                failures[room_dir.name] = "no video file found in room folder"
+                continue
+            try:
+                layout, diagnostics = process_video(video_path)
+                openings = detect_openings(diagnostics["pts_scaled"], layout)
+                results.append((room_dir.name, layout, []))
+                openings_per_room.append(openings)
+
+                frames = sample_frames(video_path, interval_s=DAMAGE_SCAN_INTERVAL_S,
+                                        max_frames=DAMAGE_SCAN_N_FRAMES)
+                per_room_damage[room_dir.name] = _run_damage_scan(frames, layout)
+            except Exception as e:
+                failures[room_dir.name] = str(e)
+
+        property_layout = stitch_rooms(results, openings_per_room)
+        for name, reason in failures.items():
+            property_layout.warnings.append(f"room '{name}' skipped: {reason}")
+        render_property(property_layout, out / "plan.svg")
+        for w in property_layout.warnings:
+            print(f"[roomscan] warning: {w}")
+        print(f"[roomscan] {len(results)}/{len(room_dirs)} room(s) reconstructed")
+
+        write_property_plan(property_layout, out / "plan.json", per_room_damage, tier="video")
+    except Exception as exc:
+        from roomscan.plan_builder import write_abstained_plan
+        from roomscan.render.svg_plan import render_stub
+        render_stub(out / "plan.svg", f"Video property error: {exc}")
+        write_abstained_plan("video", f"Video property error: {exc}", out / "plan.json")
+        print(f"[roomscan] video property tier failed: {exc}")
 
 
 def _run_photo(input_path: Path, out: Path) -> None:

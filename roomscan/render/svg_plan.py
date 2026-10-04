@@ -92,14 +92,22 @@ def render_plan(layout: "RoomLayout", out_path: Path) -> None:
     Path(out_path).write_text("\n".join(lines), encoding="utf-8")
 
 
-def render_property(property_layout: "PropertyLayout", out_path: Path) -> None:
-    """Render a schematic multi-room property SVG (Phase 8).
+def _world_xy(x: float, y: float, ox: float, oy: float, yaw: float) -> tuple[float, float]:
+    """Room-local (x, y) -> property-world coords: Manhattan-snapped
+    rotation by yaw (radians), then translation by (ox, oy)."""
+    import math
+    c, s = math.cos(yaw), math.sin(yaw)
+    return (x * c - y * s + ox, x * s + y * c + oy)
 
-    Each room's own polygon is drawn at its own (independently reconstructed)
-    shape and size, placed at the grid offset computed by
-    geometry/multi_room.py. This is NOT a geometrically precise stitch --
-    see that module's docstring for why relative room position/orientation
-    isn't determined by this method.
+
+def render_property(property_layout: "PropertyLayout", out_path: Path) -> None:
+    """Render a multi-room property SVG (Phase 8, extended).
+
+    A room placed via the door-to-door pose-graph stitch (see
+    geometry/pose_graph.py) is drawn at its solved (x, y, yaw) -- doors
+    really do coincide in this rendering. A room with no trusted door
+    placement falls back to the schematic grid (yaw=0, no spatial claim
+    beyond "a different room") -- see geometry/multi_room.py.
     """
     rooms = property_layout.rooms
     if not rooms:
@@ -111,8 +119,9 @@ def render_property(property_layout: "PropertyLayout", out_path: Path) -> None:
     for room in rooms:
         ox, oy = room.offset
         for x, y in room.layout.polygon:
-            all_xs.append(x + ox)
-            all_ys.append(y + oy)
+            wx, wy = _world_xy(x, y, ox, oy, room.yaw)
+            all_xs.append(wx)
+            all_ys.append(wy)
     if not all_xs:
         render_stub(out_path, "No room polygons to render.")
         return
@@ -143,12 +152,13 @@ def render_property(property_layout: "PropertyLayout", out_path: Path) -> None:
     for room in rooms:
         ox, oy = room.offset
         poly = room.layout.polygon
-        pts_str = " ".join(f"{tx(x + ox):.1f},{ty(y + oy):.1f}" for x, y in poly)
+        world_poly = [_world_xy(x, y, ox, oy, room.yaw) for x, y in poly]
+        pts_str = " ".join(f"{tx(wx):.1f},{ty(wy):.1f}" for wx, wy in world_poly)
         lines.append(
             f'<polygon points="{pts_str}" fill="#dce8f5" stroke="#2060a0" stroke-width="2"/>'
         )
-        cx = sum(x for x, _ in poly) / len(poly) + ox
-        cy = sum(y for _, y in poly) / len(poly) + oy
+        cx = sum(wx for wx, _ in world_poly) / len(world_poly)
+        cy = sum(wy for _, wy in world_poly) / len(world_poly)
         area = room.layout.floor_area_m2.value
         total_area += area
         lines.append(

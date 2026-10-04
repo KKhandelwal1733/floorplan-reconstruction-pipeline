@@ -42,8 +42,9 @@ def test_process_room_photos_never_crashes(tmp_path):
         cv2.imwrite(str(room_dir / f"img_{i:02d}.jpg"), p)
 
     try:
-        layout, diagnostics = process_room_photos(room_dir)
+        layout, openings, diagnostics = process_room_photos(room_dir)
         assert layout.floor_area_m2.value > 0
+        assert isinstance(openings, list)
         assert diagnostics["n_photos"] == len(photos)
         assert any("photo tier" in w for w in layout.capture_warnings)
     except ValueError:

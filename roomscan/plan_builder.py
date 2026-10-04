@@ -10,6 +10,7 @@ from typing import Any
 
 from roomscan.geometry.room_layout import RoomLayout
 from roomscan.schema_out import (
+    Adjacency,
     Capture,
     Damage,
     Measurement,
@@ -118,14 +119,16 @@ def write_abstained_plan(tier: str, reason: str, out_path: Path) -> None:
 def build_property_plan(
     property_layout: Any,
     per_room_damage: dict[str, tuple[list[Damage], list[ScopeItem]]] | None = None,
+    tier: str = "photo",
 ) -> Plan:
-    """A multi-room (photo tier) capture's Plan.
+    """A multi-room capture's Plan (photo tier, or lidar/video once they gain
+    multi-room property-folder input).
 
-    property_layout is a geometry.multi_room.PropertyLayout. Room pose uses
-    its schematic grid offset (x, y) with yaw=0 -- see multi_room.py: this
-    is NOT a geometrically validated position, just the fallback grid
-    placement, carried through honestly rather than invented as more
-    precise than it is.
+    property_layout is a geometry.multi_room.PropertyLayout. Room pose is
+    its stitched (x, y, yaw) when a door-to-door pose-graph placement was
+    trusted for that room, or its schematic grid offset with yaw=0
+    otherwise (see multi_room.py) -- carried through honestly, never
+    invented as more precise than it actually is.
     """
     per_room_damage = per_room_damage or {}
     rooms = []
@@ -133,8 +136,15 @@ def build_property_plan(
         damages, scope_items = per_room_damage.get(placed.name, ([], []))
         x, y = placed.offset
         rooms.append(build_room(
-            placed.layout, placed.name, damages, scope_items, pose=(x, y, 0.0),
+            placed.layout, placed.name, damages, scope_items, pose=(x, y, placed.yaw),
         ))
+
+    name_by_index = [placed.name for placed in property_layout.rooms]
+    adjacency = [
+        Adjacency(a=name_by_index[c.room_a], b=name_by_index[c.room_b], via="door",
+                  confidence=max(0.0, 1.0 - c.width_diff_frac))
+        for c in property_layout.correspondences
+    ]
 
     total_footprint = sum((r.floor_area_m2.value for r in rooms), 0.0)
     footprint_m2 = (
@@ -145,9 +155,9 @@ def build_property_plan(
     )
     status = "ok" if rooms else "abstained"
     return Plan(
-        capture=Capture(tier="photo", status=status, warnings=property_layout.warnings),
+        capture=Capture(tier=tier, status=status, warnings=property_layout.warnings),
         property=PropertyBlock(
-            rooms=[r.id for r in rooms], adjacency=[], footprint_m2=footprint_m2,
+            rooms=[r.id for r in rooms], adjacency=adjacency, footprint_m2=footprint_m2,
         ),
         rooms=rooms,
     )
@@ -157,8 +167,9 @@ def write_property_plan(
     property_layout: Any,
     out_path: Path,
     per_room_damage: dict[str, tuple[list[Damage], list[ScopeItem]]] | None = None,
+    tier: str = "photo",
 ) -> None:
-    write_plan(build_property_plan(property_layout, per_room_damage), out_path)
+    write_plan(build_property_plan(property_layout, per_room_damage, tier), out_path)
 
 
 def write_single_room_plan(

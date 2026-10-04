@@ -130,6 +130,8 @@ def reconstruct_from_frames(
         "n_frames": len(frames),
         "n_points_unscaled": len(pts_unscaled),
         "conformal_factor_applied": conformal_factor,
+        "pts_scaled": pts_scaled,   # world-frame cloud used for `layout` -- needed by
+                                     # detect_openings(pts, layout) for multi-room stitching
     }
     return layout, diagnostics
 

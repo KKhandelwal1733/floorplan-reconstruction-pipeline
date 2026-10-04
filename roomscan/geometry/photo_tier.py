@@ -21,13 +21,15 @@ from roomscan.config import (
     PHOTO_MIN_RECONSTRUCTED_PTS,
 )
 from roomscan.geometry.multi_room import PropertyLayout, stitch_rooms
+from roomscan.geometry.openings import DetectedOpening, detect_openings
 from roomscan.geometry.room_layout import RoomLayout
 from roomscan.geometry.video_tier import reconstruct_from_frames
 from roomscan.io.photo_loader import list_room_dirs, load_photos
 
 
-def process_room_photos(room_dir: Path) -> tuple[RoomLayout, dict[str, Any]]:
-    """Reconstruct a single room's RoomLayout from its photo folder.
+def process_room_photos(room_dir: Path) -> tuple[RoomLayout, list[DetectedOpening], dict[str, Any]]:
+    """Reconstruct a single room's RoomLayout (+ detected openings) from its
+    photo folder.
 
     Raises ValueError if reconstruction fails at any stage -- callers should
     catch this and degrade to a stub/warning rather than let it propagate.
@@ -42,9 +44,16 @@ def process_room_photos(room_dir: Path) -> tuple[RoomLayout, dict[str, Any]]:
         min_plane_inliers=PHOTO_MIN_PLANE_INLIERS, calibration_tier="photo",
         tier_label="photo",
     )
+    pts_scaled = diagnostics.pop("pts_scaled")
+    try:
+        openings = detect_openings(pts_scaled, layout)
+    except Exception:
+        # Openings are a bonus signal for pose-graph stitching, not core
+        # geometry -- never let a failure here abstain the whole room.
+        openings = []
     diagnostics["n_photos"] = diagnostics.pop("n_frames")
     diagnostics["room_dir"] = str(room_dir)
-    return layout, diagnostics
+    return layout, openings, diagnostics
 
 
 def process_property(property_dir: Path) -> tuple[PropertyLayout, dict[str, Any]]:
@@ -56,17 +65,19 @@ def process_property(property_dir: Path) -> tuple[PropertyLayout, dict[str, Any]
     """
     room_dirs = list_room_dirs(property_dir)
     results: list[tuple[str, RoomLayout, list]] = []
+    openings_per_room: list[list[DetectedOpening]] = []
     failures: dict[str, str] = {}
 
     for room_dir in room_dirs:
         try:
-            layout, _ = process_room_photos(room_dir)
+            layout, openings, _ = process_room_photos(room_dir)
             photos = load_photos(room_dir)
             results.append((room_dir.name, layout, photos))
+            openings_per_room.append(openings)
         except ValueError as e:
             failures[room_dir.name] = str(e)
 
-    property_layout = stitch_rooms(results)
+    property_layout = stitch_rooms(results, openings_per_room)
     for name, reason in failures.items():
         property_layout.warnings.append(f"room '{name}' skipped: {reason}")
 

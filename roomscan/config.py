@@ -105,6 +105,15 @@ PHOTO_MIN_PLANE_INLIERS = 5
 # shared structure between two rooms' photos (e.g. a shared doorway view).
 MULTI_ROOM_MIN_MATCHES = 30
 MULTI_ROOM_GRID_GAP_M = 1.0   # gap between rooms placed on the fallback grid
+
+# --- Pose-graph multi-room stitching (case-study realignment) ---
+# Door-to-door correspondence: two openings (one per room) are considered the
+# same physical door if their measured widths agree within this fraction.
+POSE_GRAPH_DOOR_WIDTH_TOL_FRAC = 0.35
+POSE_GRAPH_WALL_THICKNESS_M = 0.15   # gap prior between two rooms' shared wall faces
+POSE_GRAPH_HUBER_DELTA = 0.05        # scipy least_squares robust-loss scale (metres)
+POSE_GRAPH_MIN_OVERLAP_FRAC = 0.05   # reject a placement if AABB overlap exceeds this
+                                      # fraction of the smaller room's own area
 VIDEO_PLANE_THRESH_FRAC = 0.02        # plane-RANSAC threshold as a fraction of the cloud's bbox diagonal
                                        # (the unscaled cloud has no metric units yet, so a fixed-metre
                                        # threshold like RANSAC_THRESH_M is meaningless here)

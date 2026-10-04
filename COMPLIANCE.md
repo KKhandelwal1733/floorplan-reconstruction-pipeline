@@ -28,11 +28,19 @@ Outputs are **estimates**, not certified surveys.
   pseudo-ground-truth. This is the most honest and least validated of the
   three tiers; treat any output as a rough approximation and expect
   frequent abstention rather than a number, never a crash either way.
-- Multi-room stitching is schematic only: each room's shape/area is
-  independently reconstructed, but this tool does not determine true
-  relative room position or orientation (no real multi-room fixture exists
-  to validate cross-room feature matching against). Rooms are laid out on
-  a simple non-overlapping grid for visualization, not a geometric stitch.
+- Multi-room stitching (`roomscan/geometry/pose_graph.py`, `multi_room.py`):
+  each room is still independently reconstructed (own local frame, own
+  scale), but adjacent rooms whose detected doors agree in width are now
+  placed by solving a real door-to-door pose graph (Manhattan-snapped
+  rotation + robust least-squares translation, `scipy.optimize.least_squares`)
+  so that corresponding doors coincide up to a wall-thickness gap -- applied
+  uniformly across all three tiers. Rooms with no door correspondence (or
+  whose solved placement would overlap another room implausibly -- an AABB
+  proxy check, not full polygon intersection) fall back to the old
+  non-overlapping grid, which still makes no spatial claim beyond "a
+  different room." No real multi-room fixture (any tier) exists to validate
+  either path against ground truth -- a pose-graph placement is internally
+  self-consistent (doors really do coincide), not externally verified.
 - Conformal calibration (`bench/calibrate.py`, `roomscan/calibration/`): a
   standard split-conformal procedure that would, given enough real
   video/photo-vs-LiDAR comparison points, compute a statistically justified

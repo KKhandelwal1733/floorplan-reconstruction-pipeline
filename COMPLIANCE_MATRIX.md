@@ -11,9 +11,9 @@ the project's hard rule against fabricating numbers).
 | Requirement | File / artifact | Status |
 |---|---|---|
 | Capture route (Route 1 custom app OR Route 2 stock protocol) | `docs/PROTOCOL.md` | **partial** — Route 2 chosen (Stray Scanner + native camera); needs polish to be unambiguous as "the page we follow literally" |
-| Photo tier: 2-8 stills/room, any iPhone 15+, stitched whole-property plan | `roomscan/geometry/photo_tier.py`, `multi_room.py` | **partial** — per-room reconstruction works (frequently abstains honestly at realistic photo counts, see COMPLIANCE.md); multi-room output is a schematic grid, not a real adjacency-verified stitch — **fails** the "single rooms only" gate as currently built |
-| Video tier: handheld walkthrough, any iPhone 15+ | `roomscan/geometry/video_tier.py` | **done** (single room); multi-room not supported — same gap as above |
-| LiDAR tier: depth/poses/intrinsics, Pro-class | `roomscan/io/stray_scanner.py`, `room_layout.py` | **done** (single room); multi-room not supported |
+| Photo tier: 2-8 stills/room, any iPhone 15+, stitched whole-property plan | `roomscan/geometry/photo_tier.py`, `multi_room.py`, `pose_graph.py` | **partial** — per-room reconstruction works (frequently abstains honestly at realistic photo counts, see COMPLIANCE.md); multi-room now attempts a real door-to-door pose-graph stitch, falling back to the schematic grid only when no door correspondence is found — but no real multi-room photo fixture exists to validate either path against ground truth |
+| Video tier: handheld walkthrough, any iPhone 15+ | `roomscan/geometry/video_tier.py`, `cli.py::_run_video_property` | **partial** — single room **done**; multi-room now supported via a property folder of per-room video files, stitched the same pose-graph way, but untested against any real multi-room video capture |
+| LiDAR tier: depth/poses/intrinsics, Pro-class | `roomscan/io/stray_scanner.py`, `room_layout.py`, `cli.py::_run_lidar_property` | **partial** — single room **done**; multi-room now supported via a property folder of per-room Stray Scanner exports, stitched the same pose-graph way, but untested against any real multi-room LiDAR capture |
 | Device matrix: tier × hardware × honest accuracy | `DEVICE_MATRIX.md` | **done** |
 
 ## Part 2 — Output contract and gates
@@ -21,7 +21,7 @@ the project's hard rule against fabricating numbers).
 | Requirement | File / artifact | Status |
 |---|---|---|
 | Per-room: walls, ceiling height, floor area, openings | `roomscan/geometry/room_layout.py`, `openings.py` | **done** |
-| Stitched multi-room plan, correct adjacency, no overlaps, every tier incl. photo | `roomscan/geometry/multi_room.py` | **partial** — schematic grid placement only, no real pose-graph solve; see Task tracking "Build real multi-room stitching" |
+| Stitched multi-room plan, correct adjacency, no overlaps, every tier incl. photo | `roomscan/geometry/multi_room.py`, `pose_graph.py` | **partial** — a real door-to-door pose graph now solves (x, y, yaw) per room (Manhattan-snapped rotation, robust least-squares translation), with an AABB-overlap check rejecting implausible placements; rooms without a door match still fall back to the schematic grid. Reported in `plan.json`'s `property.adjacency` (door correspondences actually trusted) and `rooms[].pose`. No real multi-room fixture (any tier) exists to validate against ground truth, so treat this as internally self-consistent, not externally verified |
 | Per-surface damage regions, class, metric extent | `roomscan/damage/pipeline.py` | **done**, but via a crude colour heuristic, not a trained segmenter — disclosed in COMPLIANCE.md and `docs/model_registry.md` |
 | Concealed-damage flags with rule ID that fired | `roomscan/damage/rules.py` (`DamageFlag.rule_id`) | **done** |
 | Scope line items keyed to surface IDs | `roomscan/damage/rules.py::scope_for_damage` | **done**, no cost figures (no real pricing data to ground one in) |
@@ -47,8 +47,8 @@ the project's hard rule against fabricating numbers).
 | Opening widths ≤2cm on ≥85%, detection scored (miss+phantom) | **not measured** — no ground truth |
 | Ceiling height ≤1.5cm/room; spread ≤1cm across repeats; bias-vs-variance stated | **not measured** — no ground truth, no real repeat captures. Bias/variance framework not yet written into the technical report (tracked) |
 | Repeatability ≤1cm or 0.5%/wall | **partial** — proxy gate (above) passes against real data; literal gate **not measured** |
-| Drift accountability: report states approach + on/off ablation on stitched footprint | **not done correctly** — `bench/ablate.py` currently tests chain-length vs error, not drift-correction-on vs raw-poses-as-is on a multi-room stitch. No real drift-correction mechanism exists yet (blocked on multi-room stitching). "Poses used as-is" is explicitly an automatic fail per the case study — current state is effectively this fail state until the pose-graph work lands |
-| Photo-tier whole-property stitch, ±8% calibrated, correct adjacency, no overlaps | **fails** — schematic grid only, no real stitch (see Part 1 above) |
+| Drift accountability: report states approach + on/off ablation on stitched footprint | **partial** — a real drift-correction mechanism now exists (the pose graph itself: Manhattan snap + Huber-robust joint least-squares over all door constraints, vs. naively placing each room from only its immediately-preceding neighbour). `bench/ablate.py` still tests chain-length vs error, not this on/off comparison — redesigning it to compare pose-graph-corrected vs. raw sequential placement is tracked separately |
+| Photo-tier whole-property stitch, ±8% calibrated, correct adjacency, no overlaps | **partial** — real pose-graph stitch now attempted (see Part 1/2 above); accuracy against the ±8% gate still **not measured** (no real multi-room photo fixture) |
 | Video-tier footprint/wall lengths ±3% | **fails** — measured 65-91% error on the one real example tested (`COMPLIANCE.md`, `docs/TECHNICAL_REPORT.md`), disclosed honestly, not hidden |
 
 ## Part 3 — Head-to-head vs incumbent app
@@ -100,9 +100,10 @@ compliance coverage / 10% head-to-head / 5% capture route / 5% process evidence)
 - **Hard-blocked by lack of device access** (no further engineering can close these):
   benchmark accuracy (15%), head-to-head (10%), and the ground-truth-dependent rows
   within gates/deliverables.
-- **In active remediation** (tracked, buildable without device access): multi-room
-  pose-graph stitching, correct drift ablation, mirror/glass/low-light quality-gate
+- **In active remediation** (tracked, buildable without device access): correct drift
+  on/off ablation (vs. the now-real pose graph), mirror/glass/low-light quality-gate
   detection, reproduction bundle, error budget + bias/variance report sections, CLI
   contract match, `report.md` wiring.
 - **Done**: fix loop, process evidence, device matrix, this matrix, model/data
-  disclosures.
+  disclosures, multi-room door-to-door pose-graph stitching (all three tiers;
+  unvalidated against ground truth, no fixture exists).
