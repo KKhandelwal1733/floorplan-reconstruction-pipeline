@@ -8,6 +8,7 @@ dependencies = [
     "jsonschema>=4",
     "Pillow>=10",
     "numpy>=1.24",
+    "opencv-python-headless>=4.9",
 ]
 
 [project.optional-dependencies]

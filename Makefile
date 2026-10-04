@@ -1,4 +1,4 @@
-.PHONY: install test lint
+.PHONY: install test lint demo bench
 
 install:
 	pip install -e ".[dev]"
@@ -8,3 +8,9 @@ test:
 
 lint:
 	python -m py_compile roomscan/cli.py roomscan/schema_out.py roomscan/config.py
+
+demo:
+	python -m roomscan.cli tests/fixtures/single_room --out out
+
+bench:
+	python -m bench.harness

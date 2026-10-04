@@ -6,7 +6,15 @@ Outputs are **estimates**, not certified surveys.
 
 ## Limitations
 - LiDAR tier: ±2 cm typical; degrades in low-reflectance or specular surfaces.
-- Video tier: ±5 cm typical; scale derived from monocular depth ensemble.
+- Video tier: lightweight monocular SfM (no bundle adjustment) + a scale
+  ensemble of physical-size priors, chosen over a heavier dependency
+  (e.g. COLMAP) per the hard rule to avoid large/GPU dependencies without
+  asking first. On the one real video tested against LiDAR-tier pseudo-
+  ground-truth for the same room (see `bench/derive_tiers.py`), floor area
+  and ceiling height errors were 65-91% (see project `config.py`
+  `VIDEO_EMPIRICAL_MIN_REL_HW`), not a small percentage — intervals are
+  widened accordingly, but accuracy should be treated as unvalidated and
+  this tier used with caution until more real comparisons exist.
 - Photo tier: ±10 cm typical; no depth sensor, inference only.
 - Damage classification is advisory. Human review required before remediation decisions.
 

@@ -205,3 +205,40 @@ def print_gates(results: list[GateResult]) -> None:
         thr = f"{r.threshold}" if r.threshold is not None else "-"
         print(f"{r.gate:<32} {colour}{r.status:<14}{reset} {val:>10}  {thr:>10}  {r.note}")
     print()
+
+
+if __name__ == "__main__":
+    # `make bench` entry point: run gates (+ the real video-vs-LiDAR
+    # comparison, when a scan with a synchronized rgb.mp4 is available)
+    # against whichever real fixtures are present. Never fabricates numbers
+    # for fixtures that aren't there -- just skips with a note.
+    candidates = [
+        Path("tests/fixtures/single_room"),
+        Path("tests/fixtures/real_floor_only"),
+        Path("tests/fixtures/real_with_ceiling"),
+    ]
+    found = [c for c in candidates if c.exists()]
+    if not found:
+        print("No real scan fixtures present (gitignored; download separately). "
+              "Gates requiring scan_dir will show as 'not measured'.")
+        print_gates(run_gates())
+    for scan_dir in found:
+        print(f"\n=== {scan_dir} ===")
+        from roomscan.io.stray_scanner import load_scan
+        from roomscan.geometry.room_layout import extract_layout
+        from roomscan.geometry.openings import detect_openings
+
+        pts = load_scan(scan_dir, frame_stride=5)
+        layout = extract_layout(pts)
+        openings = detect_openings(pts, layout)
+        print_gates(run_gates(layout=layout, openings=openings, scan_dir=scan_dir))
+
+        video_path = scan_dir / "rgb.mp4"
+        if video_path.exists():
+            from bench.derive_tiers import compare_video_to_lidar
+            import json
+            print("--- video-vs-lidar comparison (real synchronized capture) ---")
+            try:
+                print(json.dumps(compare_video_to_lidar(scan_dir), indent=2))
+            except Exception as e:
+                print(f"video tier comparison failed: {e}")
