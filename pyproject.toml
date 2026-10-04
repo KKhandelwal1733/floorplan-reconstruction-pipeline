@@ -20,6 +20,16 @@ dev = [
 [tool.setuptools.packages.find]
 include = ["roomscan*"]
 
+[tool.pytest.ini_options]
+# A stale, ACL-locked leftover junction in the default %TEMP%/pytest-of-<user>/
+# directory (pytest-current, dated 2026-07-15 -- not created by this project)
+# makes pytest's own end-of-session temp-dir cleanup crash with
+# PermissionError (WinError 5), which swallows the final "N passed" summary
+# line even though every test already completed successfully. Pointing
+# basetemp at a project-local directory sidesteps that poisoned folder
+# entirely instead of fighting Windows ACLs on every run.
+addopts = "--basetemp=.pytest_tmp"
+
 [build-system]
 requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
