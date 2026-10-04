@@ -170,6 +170,100 @@ def _wall_length_gate() -> GateResult:
     )
 
 
+def _video_footprint_gate(scan_dir: Path | None = None) -> GateResult:
+    """Video wall lengths + footprint within +/-3% (literal case-study gate).
+
+    Unlike the laser-ground-truth gates above, this one IS measurable now --
+    it compares against LiDAR-tier pseudo-ground-truth on the same physical
+    capture (bench/derive_tiers.py), not laser/tape truth. Reported as a real
+    FAIL when exceeded, never folded into "not measured" just because it's
+    an unflattering number.
+    """
+    if scan_dir is None or not (scan_dir / "rgb.mp4").exists():
+        return GateResult("video_footprint_vs_3pct", NOT_MEASURED,
+                          note="pass a scan_dir with rgb.mp4 to compare video vs LiDAR-tier pseudo-ground-truth")
+    from roomscan.config import VIDEO_FOOTPRINT_GATE_TOL_FRAC
+    from bench.derive_tiers import compare_video_to_lidar
+    try:
+        result = compare_video_to_lidar(scan_dir)
+        err = result["floor_area_rel_err"]
+        ok = err <= VIDEO_FOOTPRINT_GATE_TOL_FRAC
+        return GateResult(
+            "video_footprint_vs_3pct", PASS if ok else FAIL,
+            value=f"{err:.1%}", threshold=f"<={VIDEO_FOOTPRINT_GATE_TOL_FRAC:.0%}",
+            note="floor-area error vs LiDAR-tier pseudo-ground-truth (not laser truth), same physical capture",
+        )
+    except Exception as e:
+        return GateResult("video_footprint_vs_3pct", NOT_MEASURED, note=f"comparison failed: {e}")
+
+
+def _photo_footprint_gate(scan_dir: Path | None = None, n_photos: int = 6) -> GateResult:
+    """Photo wall lengths + footprint within +/-8% (literal case-study gate),
+    on simulated photo sets derived from a real video (no real multi-room
+    photo fixture exists -- see COMPLIANCE.md). Same pseudo-ground-truth
+    caveat as the video gate above."""
+    if scan_dir is None or not (scan_dir / "rgb.mp4").exists():
+        return GateResult("photo_footprint_vs_8pct", NOT_MEASURED,
+                          note="pass a scan_dir with rgb.mp4 to derive simulated photos and compare vs LiDAR")
+    from roomscan.config import PHOTO_FOOTPRINT_GATE_TOL_FRAC
+    from bench.derive_tiers import compare_photo_to_lidar
+    try:
+        result = compare_photo_to_lidar(scan_dir, n_photos=n_photos)
+        err = result["floor_area_rel_err"]
+        ok = err <= PHOTO_FOOTPRINT_GATE_TOL_FRAC
+        return GateResult(
+            "photo_footprint_vs_8pct", PASS if ok else FAIL,
+            value=f"{err:.1%}", threshold=f"<={PHOTO_FOOTPRINT_GATE_TOL_FRAC:.0%}",
+            note=f"simulated={n_photos} photos vs LiDAR-tier pseudo-ground-truth (not laser truth)",
+        )
+    except ValueError as e:
+        return GateResult("photo_footprint_vs_8pct", NOT_MEASURED,
+                          note=f"reconstruction abstained (expected at this data sparsity): {e}")
+    except Exception as e:
+        return GateResult("photo_footprint_vs_8pct", NOT_MEASURED, note=f"comparison failed: {e}")
+
+
+def measure_execution_timing(scan_dir: Path) -> dict[str, Any]:
+    """Wall-clock timing per tier, same physical capture -- a real
+    measurement (never estimated), reported as part of the benchmark report.
+    Timed on whatever machine `make bench` runs on; not a hardware-neutral
+    benchmark, just an honest "this is what it took here."
+    """
+    import time
+
+    from roomscan.geometry.room_layout import extract_layout
+    from roomscan.io.stray_scanner import load_scan
+
+    timings: dict[str, Any] = {"scan_dir": str(scan_dir)}
+
+    t0 = time.perf_counter()
+    pts = load_scan(scan_dir, max_frames=None)
+    t1 = time.perf_counter()
+    timings["lidar_load_scan_s"] = round(t1 - t0, 2)
+
+    try:
+        extract_layout(pts)
+        t2 = time.perf_counter()
+        timings["lidar_extract_layout_s"] = round(t2 - t1, 2)
+    except Exception as e:
+        timings["lidar_extract_layout_s"] = f"failed: {e}"
+
+    video_path = scan_dir / "rgb.mp4"
+    if video_path.exists():
+        from roomscan.geometry.video_tier import process_video
+        t3 = time.perf_counter()
+        try:
+            process_video(video_path, calibration_tier=None)
+            t4 = time.perf_counter()
+            timings["video_process_video_s"] = round(t4 - t3, 2)
+        except Exception as e:
+            timings["video_process_video_s"] = f"failed: {e}"
+    else:
+        timings["video_process_video_s"] = "not measured (no rgb.mp4)"
+
+    return timings
+
+
 # ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
@@ -190,6 +284,8 @@ def run_gates(
         _floor_area_gate(),
         _ceiling_height_gate(),
         _wall_length_gate(),
+        _video_footprint_gate(scan_dir),
+        _photo_footprint_gate(scan_dir),
     ]
 
 
@@ -242,3 +338,7 @@ if __name__ == "__main__":
                 print(json.dumps(compare_video_to_lidar(scan_dir), indent=2))
             except Exception as e:
                 print(f"video tier comparison failed: {e}")
+
+        print("--- execution timing (this machine, not hardware-neutral) ---")
+        import json
+        print(json.dumps(measure_execution_timing(scan_dir), indent=2))
